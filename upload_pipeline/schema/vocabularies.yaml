@@ -1,0 +1,254 @@
+# EPI-Eval controlled vocabularies — v0.1
+#
+# This file is the authoritative registry of allowed values for every enum
+# field in schema_v0.1. The pipeline's validator reads this file at startup;
+# any value in a dataset card that isn't listed here is a validation error.
+#
+# When the validator hits an unknown value, it does fuzzy matching against
+# the registered slugs and reports near-matches in the error message.
+#
+# Extension is manual. To add a new value, edit this file in a PR. 
+
+schema_version: "0.1"
+
+# ─────────────────────────────────────────────────────────────────────────
+# Pathogen slugs. Lowercase, hyphenated, biological where possible.
+# When a dataset reports at the species level, use the species slug; when
+# it reports at a broader level (e.g. "influenza" without subtype), use the
+# broader slug. Don't list both — pick the most specific available.
+# ─────────────────────────────────────────────────────────────────────────
+pathogens:
+  # Respiratory viral
+  - influenza            # use when subtype not distinguished
+  - influenza-a
+  - influenza-b
+  - h5n1                 # subtype of influenza-a; list separately when reported as such
+  - sars-cov-2
+  - rsv
+  - mers-cov
+  - hmpv
+
+  # Filoviruses / hemorrhagic
+  - ebola
+  - marburg
+  - lassa
+
+  # Pox
+  - mpox
+  - smallpox
+
+  # Arboviral / vector-borne
+  - dengue
+  - zika
+  - chikungunya
+  - west-nile
+  - yellow-fever
+  - japanese-encephalitis
+
+  # Parasitic
+  - malaria
+  - leishmaniasis-vl
+  - leishmaniasis-cl
+
+  # Bacterial / notifiable
+  - cholera
+  - pertussis
+  - tuberculosis
+  - measles
+  - mumps
+  - rubella
+  - polio
+  - lyme
+  - leptospirosis
+  - typhus
+
+  # Enteric
+  - norovirus
+  - salmonella
+  - listeria
+  - e-coli-stec
+  - campylobacter
+  - shigella
+
+  # Other
+  - hiv
+  - hand-foot-mouth
+  - varicella
+  - hepatitis-a
+  - hepatitis-b
+  - hepatitis-c
+  - legionella
+  - anthrax
+  - botulism
+  - hansens-disease
+  - q-fever
+  - unknown              # use sparingly; for sources that report aggregated unspecified
+
+# ─────────────────────────────────────────────────────────────────────────
+# Conditions — non-pathogen entries that appear in case-register sources
+# (NNDSS, SINAN, etc.). Used at the row level when a source's condition
+# isn't a specific pathogen. Pathogens still go in the `pathogens` list
+# above; this list is for syndromes / exposures / outcomes only.
+# ─────────────────────────────────────────────────────────────────────────
+conditions:
+  # Syndromes (clinical presentations with multiple causes)
+  - acute-flaccid-myelitis
+  - sari                      # severe acute respiratory infection
+  - ili                       # influenza-like illness
+  - hus                       # hemolytic uremic syndrome
+  - guillain-barre
+
+  # Exposures
+  - lead-exposure
+  - carbon-monoxide-poisoning
+  - pesticide-exposure
+
+  # Outcomes
+  - neonatal-sepsis
+  - sids                      # sudden infant death syndrome
+
+# ─────────────────────────────────────────────────────────────────────────
+# Condition type — what kind of thing the row-level `condition` is.
+# Required whenever the row-level `condition` column is present.
+# ─────────────────────────────────────────────────────────────────────────
+condition_type:
+  - pathogen                  # condition slug resolves to the `pathogens` list above
+  - syndrome                  # clinical presentation with multiple/uncertain causes
+  - exposure                  # environmental / chemical exposure
+  - outcome                   # clinical outcome (sepsis, SIDS, etc.)
+
+# ─────────────────────────────────────────────────────────────────────────
+# Case status — case-classification certainty tier. Used at the row level
+# in case-register sources (NNDSS uses confirmed/probable/suspect).
+# Orthogonal to vintaging: a row's `case_status` is *certainty of label*,
+# not *as-of date*.
+# ─────────────────────────────────────────────────────────────────────────
+case_status:
+  - confirmed                 # meets clinical + lab criteria
+  - probable                  # meets clinical criteria with epi link
+  - suspect                   # clinical case definition only
+  - not-classified            # source reports a single count without classifying
+
+# ─────────────────────────────────────────────────────────────────────────
+# Surveillance categories — what *kind* of data the dataset is.
+# A dataset has exactly one. Multi-pathogen sources still fit in one category
+# (NNDSS is `notifiable`, NWSS is `wastewater`, etc.).
+# ─────────────────────────────────────────────────────────────────────────
+surveillance_category:
+  - respiratory          # flu/COVID/RSV-style respiratory surveillance
+  - arboviral            # vector-borne surveillance
+  - enteric              # foodborne / waterborne
+  - notifiable           # multi-disease notifiable-disease systems (NNDSS, etc.)
+  - syndromic            # ED visits / chief complaints not specific to a category
+  - mortality            # death certificates, P&I mortality
+  - mobility             # movement / transportation data
+  - search               # search trends, page views, NLP-derived signals
+  - genomic              # sequences, phylogenetics, lineage surveillance
+  - environmental        # mosquito/tick traps, climate covariates
+  - behavioral           # self-report symptoms, surveys
+  - vaccine              # coverage, adverse events
+  - amr                  # antimicrobial resistance
+  - wastewater           # treated as its own category — too distinctive to lump
+  - forecasts            # other people's forecast outputs (used as inputs / for benchmarking)
+  - multi                # datasets that genuinely span many categories (e.g. COVIDcast)
+  - none                 # use sparingly; for sources that don't fit any of the above
+
+# ─────────────────────────────────────────────────────────────────────────
+# Cadence — how often the source publishes.
+# ─────────────────────────────────────────────────────────────────────────
+cadence:
+  - daily
+  - weekly
+  - biweekly
+  - monthly
+  - quarterly
+  - annual
+  - irregular            # use only when no consistent period; explain in extra
+
+# ─────────────────────────────────────────────────────────────────────────
+# Geography levels.
+# A dataset can have multiple. Below ISO 3166-2 (first-level subnational),
+# `location_id` falls back to `location_id_native` (country-specific code).
+# ─────────────────────────────────────────────────────────────────────────
+geography_levels:
+  - global               # single global aggregate
+  - national             # one row per country
+  - subnational-region   # supra-state aggregations (HHS regions, WHO regions, NHS regions)
+  - subnational-state    # first-level admin (US states, BR states, JP prefectures)
+  - subnational-county   # second-level admin (US counties, BR municipalities)
+  - subnational-city     # cities specifically (Apple mobility, MetroCast)
+  - point                # specific lat/lon (wastewater sites, sensor stations)
+  - facility             # specific named facility (hospital, lab)
+
+# ─────────────────────────────────────────────────────────────────────────
+# Availability — what kind of access the data has.
+# Determines whether the pipeline attempts ingestion at all.
+# ─────────────────────────────────────────────────────────────────────────
+availability:
+  - open                 # public, machine-readable, redistributable
+  - gated                # requires registration / DUA / approval
+  - pdf-only             # public but not machine-readable
+  - requires-scraping    # public HTML, no API
+  - inactive             # source no longer updates; static archive
+  - unknown              # not yet evaluated
+
+# ─────────────────────────────────────────────────────────────────────────
+# Access type — how the pipeline pulls (or would pull) the data.
+# ─────────────────────────────────────────────────────────────────────────
+access_type:
+  - api                  # generic REST / JSON API
+  - socrata              # data.cdc.gov-style Socrata endpoint
+  - csv                  # static or templated CSV download
+  - github               # files in a public GitHub repo
+  - ftp
+  - dashboard            # only available via a JS dashboard (often needs scraping)
+  - delphi               # via Delphi epidata (cmu-delphi)
+  - hf                   # already on HuggingFace (e.g. another EPI-Eval dataset)
+  - other
+
+# ─────────────────────────────────────────────────────────────────────────
+# Value type for value columns. Tells the dashboard what kind of quantity
+# the column represents — fundamental for correctness when summing/diffing
+# time series. Distinct from `aggregation` (which says how to combine rows
+# spatially or temporally); value_type is causally upstream of aggregation.
+#
+# - incident:    new events in a period (admissions/week, deaths/day). Sum across periods.
+# - cumulative:  running total (cumulative cases since season start). Diff to get incident; never sum.
+# - stock:       point-in-time inventory (beds occupied, current ICU census). Mean or last across periods.
+# - rate:        per-population (cases per 100k). Re-weight by denominator to aggregate.
+# - proportion:  fraction or percentage (% positivity, % ILI). Re-weight to aggregate.
+# - index:       baseline-relative measurement (mobility index, search trend index). Source-specific aggregation.
+# - other:       use sparingly; explain in description.
+# ─────────────────────────────────────────────────────────────────────────
+value_type:
+  - incident
+  - cumulative
+  - stock
+  - rate
+  - proportion
+  - index
+  - other
+
+# ─────────────────────────────────────────────────────────────────────────
+# Aggregation type for value columns. Tells the dashboard how to combine
+# rows when zooming out (e.g. county → state, week → month).
+# ─────────────────────────────────────────────────────────────────────────
+aggregation:
+  - sum                  # counts, admissions, deaths
+  - mean                 # rates, indices
+  - rate                 # per-population rate; needs denominator context
+  - proportion           # 0-1 or 0-100; not summable
+  - count                # discrete count, sums OK
+  - max                  # peak / extremum
+  - none                 # don't auto-aggregate (e.g. raw individual records)
+
+# ─────────────────────────────────────────────────────────────────────────
+# Notes
+# ─────────────────────────────────────────────────────────────────────────
+# - Country codes use ISO 3166-1 alpha-2 directly (no enum here — too many).
+#   The validator only checks they're 2 uppercase letters or the literal
+#   string "multiple".
+# - Units (`value_columns[].unit`) are free-form strings, not enumerated.
+#   Recommended forms: "count", "admissions/week", "% change vs. baseline",
+#   "per 100k population", "log10 copies/L", "index (baseline=100)".
+#   Be specific about denominator and time window.

@@ -1,0 +1,96 @@
+# Curated metadata for CDC ILINet (FluView). Pulled via the Delphi epidata
+# `fluview` endpoint, which returns the latest revision per epiweek by default.
+# Vintaged history is available separately and would be a sibling source.
+
+pretty_name: CDC ILINet (FluView) — weighted ILI%
+license: other  # US federal works — public domain in US, no SPDX slug
+size_categories:
+  - 10K<n<100K
+tags:
+  - cadence-weekly
+  - geo-us
+  - surveillance-respiratory
+  - pathogen-influenza
+  - tier-1
+  - availability-open
+
+schema_version: "0.1"
+source_id: cdc-ilinet
+source_url: https://gis.cdc.gov/grasp/fluview/fluportaldashboard.html
+manifest_section: "§1.2"
+
+surveillance_category: respiratory
+pathogens:
+  - influenza
+
+availability: open
+availability_notes: null
+access_type: delphi
+tier: 1
+
+cadence: weekly
+geography_levels:
+  - national
+  - subnational-region
+  - subnational-state
+geography_countries:
+  - US
+
+gold_standard_for: []
+vintaged_version_of: null
+succeeds: null
+derived_from: []
+
+value_columns:
+  - name: wili
+    unit: percent (0-100)
+    value_type: proportion
+    description: Weighted percentage of outpatient visits for influenza-like illness; weighted by state population. Primary ILINet signal.
+    aggregation: rate
+  - name: ili
+    unit: percent (0-100)
+    value_type: proportion
+    description: Unweighted percentage of outpatient visits for ILI (raw across reporting providers).
+    aggregation: rate
+  - name: num_ili
+    unit: patients/week
+    value_type: incident
+    description: Number of patient visits with ILI symptoms in this epiweek.
+    aggregation: sum
+  - name: num_patients
+    unit: patients/week
+    value_type: incident
+    description: Total outpatient visits across reporting providers in this epiweek (the denominator for `wili`/`ili`).
+    aggregation: sum
+  - name: num_providers
+    unit: providers
+    value_type: stock
+    description: Number of sentinel providers reporting in this epiweek; data quality indicator (low values mean sparse coverage).
+    aggregation: sum
+
+notes:
+  extra_columns:
+    - column: location_name
+      description: Delphi region code as reported by the source (e.g. `nat`, `hhs5`, `ca`). `location_id` is canonical.
+  interpretation_caveats:
+    - column: wili
+      caveat: "ILINet is a *symptomatic* signal — patients with ILI symptoms whether or not flu is lab-confirmed. It captures non-flu respiratory illness too (RSV, common cold, COVID before COVID-specific tracking). Don't equate `wili` directly with flu prevalence."
+    - column: num_providers
+      caveat: "Provider participation grew over time. Pre-2010 values reflect a smaller sentinel network and are less comparable to post-2010 values for the same region."
+    - column: ili
+      caveat: "Unweighted; means populous and small states contribute equally to a national `ili` value, which is why `wili` is the standard."
+  general: |
+    ILINet is the longest-running US flu surveillance signal (1997-W40 onward). Sentinel
+    outpatient providers report total visits and visits matching the ILI case definition
+    (fever ≥100°F plus cough or sore throat without a known cause). Coverage and provider
+    counts vary by region and over time.
+
+    For lab-confirmed flu trends, pair this with WHO/NREVSS virologic data (NREVSS, §1.6).
+    The combination — `wili` × `% positive for flu` — is the standard for inferring true
+    flu prevalence.
+
+extra:
+  delphi_endpoint: https://api.delphi.cmu.edu/epidata/fluview/
+  api_docs: https://cmu-delphi.github.io/delphi-epidata/api/fluview.html
+  vintaging_note: "This dataset uses the latest revision per epiweek. For revision history (as_of-aware queries), use Delphi's fluview endpoint with the `issues` parameter."
+  source_columns_omitted: 6 of 16 source columns dropped (release_date, issue, lag, num_age_0..5). Available via the Delphi endpoint if needed.

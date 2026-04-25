@@ -1,0 +1,150 @@
+# Curated metadata for NHSN HRD. The framework merges this with computed
+# fields (time_coverage, row_count, etc.) at upload time to produce the
+# final README.md on HuggingFace.
+
+pretty_name: CDC NHSN Hospital Respiratory Data (HRD)
+license: other  # US federal works — public domain in US, no SPDX slug
+size_categories:
+  - 10K<n<100K
+tags:
+  - cadence-weekly
+  - geo-us
+  - surveillance-respiratory
+  - pathogen-influenza
+  - pathogen-sars-cov-2
+  - pathogen-rsv
+  - tier-1
+  - availability-open
+
+schema_version: "0.1"
+source_id: nhsn-hrd
+source_url: https://data.cdc.gov/Public-Health-Surveillance/Weekly-Hospital-Respiratory-Data-HRD-Metrics-by-Ju/ua7e-t2fy/about_data
+manifest_section: "§1.1"
+
+surveillance_category: respiratory
+pathogens:
+  - influenza
+  - sars-cov-2
+  - rsv
+
+availability: open
+availability_notes: null
+access_type: socrata
+tier: 1
+
+cadence: weekly
+geography_levels:
+  - national
+  - subnational-region   # HHS regions 1-10, encoded as US-HHS-N
+  - subnational-state
+geography_countries:
+  - US
+
+gold_standard_for:
+  - flusight-forecast-hub
+  - covid19-forecast-hub
+  - rsv-forecast-hub
+vintaged_version_of: null
+succeeds: hhs-protect
+derived_from: []
+
+value_columns:
+  - name: totalconfflunewadm
+    unit: admissions/week
+    value_type: incident
+    description: New laboratory-confirmed influenza hospital admissions (FluSight target)
+    aggregation: sum
+  - name: totalconfc19newadm
+    unit: admissions/week
+    value_type: incident
+    description: New laboratory-confirmed COVID-19 hospital admissions
+    aggregation: sum
+  - name: totalconfrsvnewadm
+    unit: admissions/week
+    value_type: incident
+    description: New laboratory-confirmed RSV hospital admissions (mandatory reporting from epiweek 2024-46)
+    aggregation: sum
+  - name: numinptbeds
+    unit: beds
+    value_type: stock
+    description: Total staffed inpatient beds (capacity denominator) — point-in-time
+    aggregation: mean
+  - name: numinptbedsocc
+    unit: beds
+    value_type: stock
+    description: Staffed inpatient beds occupied — point-in-time
+    aggregation: mean
+  - name: numicubeds
+    unit: beds
+    value_type: stock
+    description: Total ICU beds — point-in-time
+    aggregation: mean
+  - name: numicubedsocc
+    unit: beds
+    value_type: stock
+    description: ICU beds occupied — point-in-time
+    aggregation: mean
+  - name: totalconfc19icupats
+    unit: patients
+    value_type: stock
+    description: Confirmed COVID-19 patients in ICU — point-in-time
+    aggregation: mean
+  - name: totalconffluicupats
+    unit: patients
+    value_type: stock
+    description: Confirmed influenza patients in ICU — point-in-time
+    aggregation: mean
+  - name: totalconfflunewadmper100k
+    unit: admissions/week per 100k population
+    value_type: rate
+    description: Weekly flu admission rate per 100k population
+    aggregation: rate
+  - name: totalconfc19newadmper100k
+    unit: admissions/week per 100k population
+    value_type: rate
+    description: Weekly COVID-19 admission rate per 100k population
+    aggregation: rate
+  - name: totalconfflunewadmcumulativeseasonalsum
+    unit: admissions
+    value_type: cumulative
+    description: Cumulative flu admissions since start of respiratory season
+    aggregation: max
+  - name: totalconfc19newadmcumulativeseasonalsum
+    unit: admissions
+    value_type: cumulative
+    description: Cumulative COVID-19 admissions since start of respiratory season
+    aggregation: max
+  - name: totalconfrsvnewadmcumulativeseasonalsum
+    unit: admissions
+    value_type: cumulative
+    description: Cumulative RSV admissions since start of respiratory season
+    aggregation: max
+
+notes:
+  extra_columns:
+    - column: location_name
+      description: 2-letter postal abbreviation as reported by the source. Kept for traceability; `location_id` is canonical.
+    - column: respseason
+      description: "Respiratory season identifier (e.g. '2024-2025'). NHSN-specific; useful for grouping by season but doesn't appear in other sources."
+  interpretation_caveats:
+    - column: numinptbeds
+      caveat: "Counts only *staffed* beds (those with available staff to operate). HHS Protect's analogous capacity column had different inclusion criteria; do not naively splice across the 2024-11 boundary."
+    - column: totalconfflunewadm
+      caveat: "Counts new admissions where flu was confirmed by lab on or within 14 days of admission. Reporting jurisdictions varied this rule pre-2024-11; treat pre-2024-11 values as approximate."
+    - column: totalconfrsvnewadm
+      caveat: "RSV mandatory reporting started epiweek 2024-46; pre-2024-46 values are NaN or sparsely populated by voluntary reporters."
+    - column: "*cumulativeseasonalsum"
+      caveat: "Cumulative within a respiratory season (resets at season boundary). Use with `value_type: cumulative` discipline — never sum, diff to recover incident."
+  general: |
+    NHSN HRD is the FluSight scoring target from the 2024–25 season onward. The feed includes
+    backfilled HHS Protect data going back to 2020-08, but the underlying reporting program
+    changed in 2024-11 (voluntary → mandatory). For long-term modeling that crosses that boundary,
+    treat pre-2024-11 and post-2024-11 as having different observational regimes.
+
+    Hospital reporting became voluntary 2024-05-01 to 2024-11-09; mandatory reporting resumed
+    under NHSN HRD starting epiweek 2024-46. The voluntary period has reduced coverage.
+
+extra:
+  case_definition_url: https://www.cdc.gov/nhsn/psc/respiratory-data.html
+  source_columns_omitted: 199 of 213 source columns omitted (mostly adult/ped breakdowns, percentage-change variants, and per-hospital-reporter normalizations). Available on the source endpoint if needed.
+  flusight_target_column: totalconfflunewadm

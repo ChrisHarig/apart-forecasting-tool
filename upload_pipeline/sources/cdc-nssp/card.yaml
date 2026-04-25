@@ -1,0 +1,81 @@
+# Curated metadata for CDC NSSP / ESSENCE (aggregate). The data is in
+# long format — one row per (week, geography, pathogen) — so it exercises
+# the row-level `condition` / `condition_type` columns from v0.1.
+
+pretty_name: CDC NSSP / ESSENCE — ED visits for ILI / COVID / RSV (aggregate)
+license: other  # US federal works — public domain in US, no SPDX slug
+size_categories:
+  - 10K<n<100K
+tags:
+  - cadence-weekly
+  - geo-us
+  - surveillance-syndromic
+  - pathogen-influenza
+  - pathogen-sars-cov-2
+  - pathogen-rsv
+  - tier-1
+  - availability-open
+
+schema_version: "0.1"
+source_id: cdc-nssp
+source_url: https://data.cdc.gov/Public-Health-Surveillance/2023-Respiratory-Virus-Response-NSSP-Emergency-Dep/vutn-jzwm
+manifest_section: "§1.8"
+
+# Note: surveillance_category is `syndromic` because NSSP captures ED visits
+# matching syndromic case definitions (chief complaint / diagnosis), not
+# laboratory-confirmed cases. Distinct from ILINet (also syndromic, outpatient)
+# and NHSN HRD (lab-confirmed admissions).
+surveillance_category: syndromic
+pathogens:
+  - influenza
+  - sars-cov-2
+  - rsv
+
+availability: open
+availability_notes: null
+access_type: socrata
+tier: 1
+
+cadence: weekly
+geography_levels:
+  - national
+  - subnational-state
+geography_countries:
+  - US
+
+gold_standard_for: []
+vintaged_version_of: null
+succeeds: null
+derived_from: []
+
+value_columns:
+  - name: percent_visits
+    unit: percent (0-100)
+    value_type: proportion
+    description: Percentage of ED visits with chief complaint or diagnosis matching the syndromic case definition for the row's `condition`.
+    aggregation: proportion
+
+notes:
+  extra_columns:
+    - column: location_name
+      description: Source's full state name (or "United States"). Kept for traceability; `location_id` is canonical.
+    - column: condition_native
+      description: Source's pathogen label as published (`Influenza`, `COVID-19`, `RSV`). Mapped to canonical `condition` slug for cross-source filtering.
+  interpretation_caveats:
+    - column: percent_visits
+      caveat: "Syndromic — based on chief complaint or diagnosis codes at ED triage, not lab confirmation. Sensitive to coding practices, which vary by hospital and state. Not directly comparable to NHSN HRD's `totalconfflunewadm` (lab-confirmed admissions) or ILINet's `wili` (sentinel outpatient ILI)."
+    - column: condition
+      caveat: "`sars-cov-2` here means 'ED visits with COVID-19 syndromic match', not 'PCR-confirmed COVID admissions'. Same for `influenza` and `rsv`."
+  general: |
+    NSSP (National Syndromic Surveillance Program) covers a large fraction of US ED visits
+    via the BioSense platform / ESSENCE. This Socrata feed is a state-aggregated weekly
+    summary of three respiratory pathogens; finer-grained NSSP data (sub-state HSA, broader
+    case definitions) is gated and not exposed here.
+
+    South Dakota does not participate in NSSP and is absent from this feed. State
+    participation has expanded over time, so historical sparsity differs by state.
+
+extra:
+  socrata_endpoint: https://data.cdc.gov/resource/vutn-jzwm.json
+  delphi_alternative: "Delphi epidata exposes the same NSSP data via the `nssp` endpoint with full vintaging support. A future `cdc-nssp-vintaged` source could provide the as-of history."
+  source_columns_omitted: 0 (all 4 source columns retained as either canonical or extra columns)

@@ -2,6 +2,8 @@ node_modules
 dist
 .env
 .env.local
+.env.*
+!.env.example
 npm-debug.log*
 coverage
 *.log
@@ -11,8 +13,33 @@ __pycache__
 *.py[cod]
 .pytest_cache
 .ruff_cache
+.mypy_cache
 backend/.test-data
 backend/.venv
 backend/*.egg-info
 backend/sentinel_atlas_dev.db
 backend/pytest-cache-files-*
+
+# upload_pipeline (data flow code)
+.venv/
+venv/
+upload_pipeline/sources/*/data/
+upload_pipeline/sources/*/README.md
+upload_pipeline/data/
+upload_pipeline/cache/
+upload_pipeline/tmp/
+*.parquet
+*.csv.gz
+
+# Local user uploads — never committed
+data/private/*
+!data/private/.gitkeep
+
+# HF cache
+.cache/
+
+# Editor / OS
+.claude/
+.DS_Store
+.idea/
+.vscode/

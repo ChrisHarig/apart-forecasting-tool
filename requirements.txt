@@ -1,0 +1,7 @@
+requests>=2.32
+pandas>=2.2
+pyarrow>=18
+pyyaml>=6.0
+huggingface_hub>=0.26
+python-dotenv>=1.0
+epiweeks>=2.3

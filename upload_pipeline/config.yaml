@@ -1,0 +1,12 @@
+# EPI-Eval pipeline configuration (non-secret).
+# Secrets (HF_TOKEN) live in .env and are never read from this file.
+
+hf_org: EPI-Eval
+hf_user: ChrisHarig
+
+# Each dataset is uploaded to: EPI-Eval/<source_id>
+# e.g. EPI-Eval/nhsn-hrd, EPI-Eval/cdc-ilinet, EPI-Eval/apple-google-mobility
+dataset_namespace_pattern: "EPI-Eval/{source_id}"
+
+# Schema currently in use. The validator routes to v-specific logic.
+schema_version: "0.1"
