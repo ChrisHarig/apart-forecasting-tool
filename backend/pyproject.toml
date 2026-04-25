@@ -1,0 +1,28 @@
+[project]
+name = "sentinel-atlas-backend"
+version = "0.1.0"
+description = "FastAPI backend scaffold for Sentinel Atlas aggregate data readiness."
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.110",
+  "uvicorn[standard]>=0.27",
+  "sqlalchemy>=2.0",
+  "pydantic-settings>=2.2",
+  "python-multipart>=0.0.9",
+  "alembic>=1.13",
+  "psycopg[binary]>=3.1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "httpx>=0.27",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["app/tests"]
+pythonpath = ["."]
+addopts = "-p no:cacheprovider"
+
+[tool.ruff]
+line-length = 120
