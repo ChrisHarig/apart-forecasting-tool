@@ -5,6 +5,13 @@
 // simplified at ~5 km tolerance. Vendored at
 // `src/assets/geojson/admin1-50m.geo.json` (2.2 MB).
 //
+// Caching:
+//   - The full file load is module-cached via `allPromise` — only one
+//     dynamic import per session.
+//   - Per-country-set filter results are cached in `filteredByKey` so the
+//     second open of the same dataset (or any dataset with the same set
+//     of countries) reuses the same FeatureCollection by reference.
+//
 // Coverage caveats:
 //   - Some countries' admin-1 in Natural Earth represents the *second*-level
 //     admin division, not the ISO 3166-2 first-level region. Examples:
@@ -31,23 +38,49 @@ interface RawProperties {
 
 let allPromise: Promise<FeatureCollection<Geometry, BoundaryFeatureProperties>> | null = null;
 
+function logTiming(label: string, t0: number, n?: number): void {
+  const ms = (performance.now() - t0).toFixed(0);
+  const count = n !== undefined ? ` (${n} features)` : "";
+  console.info(`[locations] ${label} in ${ms}ms${count}`);
+}
+
 function loadAll(): Promise<FeatureCollection<Geometry, BoundaryFeatureProperties>> {
   if (!allPromise) {
-    allPromise = import("../../assets/geojson/admin1-50m.geo.json").then((mod) => {
-      const raw = mod.default as FeatureCollection<Geometry, RawProperties>;
-      const features = raw.features
-        .filter((f) => typeof f.properties?.iso_3166_2 === "string" && f.properties.iso_3166_2.length > 0)
-        .map((f) => ({
-          ...f,
-          properties: {
-            id: f.properties!.iso_3166_2 as string,
-            name: f.properties!.name ?? ""
-          }
-        })) satisfies Feature<Geometry, BoundaryFeatureProperties>[];
-      return { type: "FeatureCollection", features };
-    });
+    const t0 = performance.now();
+    allPromise = import("../../assets/geojson/admin1-50m.geo.json")
+      .then((mod) => {
+        const tParsed = performance.now();
+        logTiming("loadIso3166_2 chunk fetch+parse", t0);
+        const raw = mod.default as FeatureCollection<Geometry, RawProperties>;
+        const features = raw.features
+          .filter((f) => typeof f.properties?.iso_3166_2 === "string" && f.properties.iso_3166_2.length > 0)
+          .map((f) => ({
+            ...f,
+            properties: {
+              id: f.properties!.iso_3166_2 as string,
+              name: f.properties!.name ?? ""
+            }
+          })) satisfies Feature<Geometry, BoundaryFeatureProperties>[];
+        logTiming("loadIso3166_2 reshape", tParsed, features.length);
+        return { type: "FeatureCollection" as const, features };
+      })
+      .catch((err) => {
+        // Drop the cached promise so a manual retry has a chance.
+        allPromise = null;
+        console.error("[locations] loadIso3166_2 failed", err);
+        throw err;
+      });
   }
   return allPromise;
+}
+
+// Per-country-set filter cache. Key is a sorted, comma-joined string of the
+// countries; value is the filtered FeatureCollection by reference, so the
+// second open of UKHSA or PHAC reuses the exact same object.
+const filteredByKey = new Map<string, FeatureCollection<Geometry, BoundaryFeatureProperties>>();
+
+function cacheKey(countries: ReadonlySet<string>): string {
+  return Array.from(countries).sort().join(",");
 }
 
 /**
@@ -60,11 +93,26 @@ export async function loadIso3166_2GeoJson(
 ): Promise<FeatureCollection<Geometry, BoundaryFeatureProperties>> {
   const all = await loadAll();
   if (countries.size === 0) return all;
-  const features = all.features.filter((f) => {
-    const id = f.properties?.id;
-    if (typeof id !== "string") return false;
-    const cc = id.slice(0, 2);
-    return countries.has(cc);
-  });
-  return { type: "FeatureCollection", features };
+  const key = cacheKey(countries);
+  const cached = filteredByKey.get(key);
+  if (cached) return cached;
+  const t0 = performance.now();
+  const filtered: FeatureCollection<Geometry, BoundaryFeatureProperties> = {
+    type: "FeatureCollection",
+    features: all.features.filter((f) => {
+      const id = f.properties?.id;
+      if (typeof id !== "string") return false;
+      const cc = id.slice(0, 2);
+      return countries.has(cc);
+    })
+  };
+  filteredByKey.set(key, filtered);
+  logTiming(`loadIso3166_2GeoJson filter [${key}]`, t0, filtered.features.length);
+  return filtered;
+}
+
+// Test-only: clear all caches. Exported so unit tests can isolate runs.
+export function _resetIso3166_2CachesForTests(): void {
+  allPromise = null;
+  filteredByKey.clear();
 }

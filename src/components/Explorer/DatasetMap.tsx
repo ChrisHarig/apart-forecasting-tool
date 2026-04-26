@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Pause, Play } from "lucide-react";
 import type { FeatureCollection, Geometry } from "geojson";
 import { BoundaryMap, type BoundaryFeatureProps, type BoundarySelection } from "../Map/BoundaryMap";
 import { buildCountryBoundariesGeoJson } from "../Map/countrySelectionLayer";
@@ -171,7 +171,7 @@ function RenderedMap({ level, source, rows }: RenderedMapProps) {
   const usCounty = useUsBoundaryView(level, "us-county");
   const iso3166_2 = useIso3166_2View(level);
   const synthetic = useSyntheticView(level);
-  const view =
+  const viewState =
     level.boundaryType === "country"
       ? country
       : level.boundaryType === "us-state"
@@ -181,6 +181,8 @@ function RenderedMap({ level, source, rows }: RenderedMapProps) {
       : level.boundaryType === "iso3166-2"
       ? iso3166_2
       : synthetic;
+  const view = viewState.view;
+  const viewError = viewState.error;
 
   const [selected, setSelected] = useState<BoundarySelection | null>(null);
   useEffect(() => {
@@ -349,10 +351,23 @@ function RenderedMap({ level, source, rows }: RenderedMapProps) {
     return () => window.clearInterval(id);
   }, [isPlaying, speedMs, dates.length, endIdx]);
 
+  if (viewError) {
+    return (
+      <div className="rounded-md border border-red-500/30 bg-red-950/20 p-4 text-sm text-red-200">
+        <p className="font-semibold">Couldn't load map boundaries</p>
+        <p className="mt-1 text-xs text-red-200/80">{viewError}</p>
+        <p className="mt-2 text-xs text-red-200/60">
+          Reload the page to retry. Persistent failures usually mean the
+          chunk fetch was blocked (network, ad-blocker, dev server reload).
+        </p>
+      </div>
+    );
+  }
   if (!view) {
     return (
-      <div className="rounded-md border border-white/10 bg-white/[0.03] p-4 text-sm text-neutral-300">
-        Loading boundaries…
+      <div className="flex items-center gap-3 rounded-md border border-white/10 bg-white/[0.03] p-4 text-sm text-neutral-300">
+        <Loader2 className="h-4 w-4 animate-spin text-sky-400" aria-hidden="true" />
+        <span>Loading boundaries…</span>
       </div>
     );
   }
@@ -993,9 +1008,21 @@ interface BoundaryView {
   syntheticTargetKind?: "us-state" | "country";
 }
 
-function useCountryView(level: DetectedLevel, source: SourceMetadata): BoundaryView | null {
+// View hooks all return this shape. `view` is null while loading or on
+// error; `error` is set when the underlying loader (dynamic import,
+// registry resolution) failed. The renderer checks both: view set →
+// render the map; error set → show error; both null → "loading…".
+interface ViewState {
+  view: BoundaryView | null;
+  error: string | null;
+}
+const VIEW_IDLE: ViewState = { view: null, error: null };
+const viewReady = (v: BoundaryView): ViewState => ({ view: v, error: null });
+const viewError = (msg: string): ViewState => ({ view: null, error: msg });
+
+function useCountryView(level: DetectedLevel, source: SourceMetadata): ViewState {
   return useMemo(() => {
-    if (level.boundaryType !== "country") return null;
+    if (level.boundaryType !== "country") return VIEW_IDLE;
     const base = buildCountryBoundariesGeoJson();
     const reshaped: FeatureCollection<Geometry, BoundaryFeatureProps> = {
       type: "FeatureCollection",
@@ -1018,37 +1045,43 @@ function useCountryView(level: DetectedLevel, source: SourceMetadata): BoundaryV
         if (iso3) scopeIds.add(iso3);
       }
     }
-    return { geojson: reshaped, highlightedIds: iso3Ids, scopeIds };
+    return viewReady({ geojson: reshaped, highlightedIds: iso3Ids, scopeIds });
   }, [level, source]);
 }
 
-function useUsBoundaryView(level: DetectedLevel, expectedType: BoundaryType): BoundaryView | null {
-  const [view, setView] = useState<BoundaryView | null>(null);
+function useUsBoundaryView(level: DetectedLevel, expectedType: BoundaryType): ViewState {
+  const [state, setState] = useState<ViewState>(VIEW_IDLE);
   useEffect(() => {
     if (level.boundaryType !== expectedType) {
-      setView(null);
+      setState(VIEW_IDLE);
       return;
     }
     let cancelled = false;
+    setState(VIEW_IDLE);
     const loader = expectedType === "us-state" ? loadUsStatesGeoJson : loadUsCountiesGeoJson;
-    loader().then((geojson) => {
-      if (cancelled) return;
-      const scopeIds = new Set<string>();
-      for (const f of geojson.features) scopeIds.add(f.properties.id);
-      setView({ geojson, highlightedIds: level.ids, scopeIds });
-    });
+    loader()
+      .then((geojson) => {
+        if (cancelled) return;
+        const scopeIds = new Set<string>();
+        for (const f of geojson.features) scopeIds.add(f.properties.id);
+        setState(viewReady({ geojson, highlightedIds: level.ids, scopeIds }));
+      })
+      .catch((err: Error) => {
+        if (cancelled) return;
+        setState(viewError(`Couldn't load ${expectedType} boundaries: ${err.message}`));
+      });
     return () => {
       cancelled = true;
     };
   }, [level, expectedType]);
-  return view;
+  return state;
 }
 
-function useIso3166_2View(level: DetectedLevel): BoundaryView | null {
-  const [view, setView] = useState<BoundaryView | null>(null);
+function useIso3166_2View(level: DetectedLevel): ViewState {
+  const [state, setState] = useState<ViewState>(VIEW_IDLE);
   useEffect(() => {
     if (level.boundaryType !== "iso3166-2") {
-      setView(null);
+      setState(VIEW_IDLE);
       return;
     }
     // Filter polygons to just the countries the dataset references — keeps
@@ -1058,29 +1091,35 @@ function useIso3166_2View(level: DetectedLevel): BoundaryView | null {
       if (typeof id === "string" && id.length >= 2) countries.add(id.slice(0, 2).toUpperCase());
     }
     let cancelled = false;
-    loadIso3166_2GeoJson(countries).then((geojson) => {
-      if (cancelled) return;
-      const polygonIds = new Set<string>();
-      for (const f of geojson.features) polygonIds.add(f.properties.id);
-      // highlightedIds = rows that actually have a polygon to render against.
-      // scopeIds = every polygon in the loaded countries (so unmatched-but-
-      // expected regions show as scope-missing instead of disappearing).
-      const highlighted = new Set<string>();
-      for (const id of level.ids) if (polygonIds.has(String(id).toUpperCase())) highlighted.add(String(id).toUpperCase());
-      setView({ geojson, highlightedIds: highlighted, scopeIds: polygonIds });
-    });
+    setState(VIEW_IDLE);
+    loadIso3166_2GeoJson(countries)
+      .then((geojson) => {
+        if (cancelled) return;
+        const polygonIds = new Set<string>();
+        for (const f of geojson.features) polygonIds.add(f.properties.id);
+        // highlightedIds = rows that actually have a polygon to render against.
+        // scopeIds = every polygon in the loaded countries (so unmatched-but-
+        // expected regions show as scope-missing instead of disappearing).
+        const highlighted = new Set<string>();
+        for (const id of level.ids) if (polygonIds.has(String(id).toUpperCase())) highlighted.add(String(id).toUpperCase());
+        setState(viewReady({ geojson, highlightedIds: highlighted, scopeIds: polygonIds }));
+      })
+      .catch((err: Error) => {
+        if (cancelled) return;
+        setState(viewError(`Couldn't load admin-1 boundaries: ${err.message}`));
+      });
     return () => {
       cancelled = true;
     };
   }, [level]);
-  return view;
+  return state;
 }
 
-function useSyntheticView(level: DetectedLevel): BoundaryView | null {
-  const [view, setView] = useState<BoundaryView | null>(null);
+function useSyntheticView(level: DetectedLevel): ViewState {
+  const [state, setState] = useState<ViewState>(VIEW_IDLE);
   useEffect(() => {
     if (level.boundaryType !== "subnational-region") {
-      setView(null);
+      setState(VIEW_IDLE);
       return;
     }
     // Decide what real-boundary kind the level renders as. If any code is
@@ -1088,12 +1127,12 @@ function useSyntheticView(level: DetectedLevel): BoundaryView | null {
     // extendWithFallbacks surface a country-aggregated alternative.
     const targetKind = pickSyntheticTargetKind(level.ids);
     if (!targetKind) {
-      setView(null);
+      setState(VIEW_IDLE);
       return;
     }
+    setState(VIEW_IDLE);
 
     if (targetKind === "us-state") {
-      // Compute the union of all FIPS the level's synthetic codes paint onto.
       const highlighted = new Set<string>();
       for (const code of level.ids) {
         for (const fips of expandSyntheticToBoundaryIds(code.toUpperCase(), "us-state")) {
@@ -1101,24 +1140,28 @@ function useSyntheticView(level: DetectedLevel): BoundaryView | null {
         }
       }
       let cancelled = false;
-      loadUsStatesGeoJson().then((geojson) => {
-        if (cancelled) return;
-        const scopeIds = new Set<string>();
-        for (const f of geojson.features) scopeIds.add(f.properties.id);
-        setView({
-          geojson,
-          highlightedIds: highlighted,
-          scopeIds,
-          syntheticTargetKind: "us-state"
+      loadUsStatesGeoJson()
+        .then((geojson) => {
+          if (cancelled) return;
+          const scopeIds = new Set<string>();
+          for (const f of geojson.features) scopeIds.add(f.properties.id);
+          setState(viewReady({
+            geojson,
+            highlightedIds: highlighted,
+            scopeIds,
+            syntheticTargetKind: "us-state"
+          }));
+        })
+        .catch((err: Error) => {
+          if (cancelled) return;
+          setState(viewError(`Couldn't load us-state boundaries: ${err.message}`));
         });
-      });
       return () => {
         cancelled = true;
       };
     }
 
-    // targetKind === "country": render at country level. Use the same
-    // ISO-3 keyed country GeoJSON as `useCountryView`.
+    // targetKind === "country": render at country level synchronously.
     const base = buildCountryBoundariesGeoJson();
     const reshaped: FeatureCollection<Geometry, BoundaryFeatureProps> = {
       type: "FeatureCollection",
@@ -1134,13 +1177,13 @@ function useSyntheticView(level: DetectedLevel): BoundaryView | null {
         if (iso3) highlighted.add(iso3);
       }
     }
-    setView({
+    setState(viewReady({
       geojson: reshaped,
       highlightedIds: highlighted,
       syntheticTargetKind: "country"
-    });
+    }));
   }, [level]);
-  return view;
+  return state;
 }
 
 // Quiet "unused" lint for SYNTHETIC_BOUNDARY_MAP — it's referenced indirectly

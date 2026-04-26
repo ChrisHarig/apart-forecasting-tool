@@ -1,6 +1,10 @@
 // Lazy loaders for us-atlas topojson. Counties is large (~9MB), so we only
 // pull it when the user actually selects the US-county view. Vite splits each
 // dynamic import into its own chunk.
+//
+// All loaders are module-cached via singleton promises — every caller waits
+// on the same in-flight load. Timing is logged so a stuck dynamic import is
+// observable in the browser console (FOLLOW_UPS #4).
 
 import { feature } from "topojson-client";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
@@ -27,12 +31,30 @@ function topologyToCollection(topology: UsTopology, objectKey: string): FeatureC
   return { type: "FeatureCollection", features };
 }
 
+function logTiming(label: string, t0: number, n?: number): void {
+  const ms = (performance.now() - t0).toFixed(0);
+  const count = n !== undefined ? ` (${n} features)` : "";
+  console.info(`[locations] ${label} in ${ms}ms${count}`);
+}
+
 let statesPromise: Promise<FeatureCollection<Geometry, BoundaryFeatureProperties>> | null = null;
 export function loadUsStatesGeoJson(): Promise<FeatureCollection<Geometry, BoundaryFeatureProperties>> {
   if (!statesPromise) {
-    statesPromise = import("us-atlas/states-10m.json").then((mod) =>
-      topologyToCollection(mod.default as unknown as UsTopology, "states")
-    );
+    const t0 = performance.now();
+    statesPromise = import("us-atlas/states-10m.json")
+      .then((mod) => {
+        const t1 = performance.now();
+        const fc = topologyToCollection(mod.default as unknown as UsTopology, "states");
+        logTiming(`loadUsStatesGeoJson chunk fetch+parse`, t0);
+        logTiming(`loadUsStatesGeoJson topology→features`, t1, fc.features.length);
+        return fc;
+      })
+      .catch((err) => {
+        // Drop the cached promise so a manual retry has a chance.
+        statesPromise = null;
+        console.error("[locations] loadUsStatesGeoJson failed", err);
+        throw err;
+      });
   }
   return statesPromise;
 }
@@ -40,9 +62,20 @@ export function loadUsStatesGeoJson(): Promise<FeatureCollection<Geometry, Bound
 let countiesPromise: Promise<FeatureCollection<Geometry, BoundaryFeatureProperties>> | null = null;
 export function loadUsCountiesGeoJson(): Promise<FeatureCollection<Geometry, BoundaryFeatureProperties>> {
   if (!countiesPromise) {
-    countiesPromise = import("us-atlas/counties-10m.json").then((mod) =>
-      topologyToCollection(mod.default as unknown as UsTopology, "counties")
-    );
+    const t0 = performance.now();
+    countiesPromise = import("us-atlas/counties-10m.json")
+      .then((mod) => {
+        const t1 = performance.now();
+        const fc = topologyToCollection(mod.default as unknown as UsTopology, "counties");
+        logTiming(`loadUsCountiesGeoJson chunk fetch+parse`, t0);
+        logTiming(`loadUsCountiesGeoJson topology→features`, t1, fc.features.length);
+        return fc;
+      })
+      .catch((err) => {
+        countiesPromise = null;
+        console.error("[locations] loadUsCountiesGeoJson failed", err);
+        throw err;
+      });
   }
   return countiesPromise;
 }

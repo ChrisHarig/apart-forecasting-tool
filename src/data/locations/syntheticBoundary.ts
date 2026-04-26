@@ -167,23 +167,32 @@ export function expandSyntheticToBoundaryIds(
 
 /**
  * Decide what target boundary kind to render the level at, given the codes
- * present. Returns null when the codes don't all share a clean target kind
- * (mixed registry / unmapped codes) — caller falls back to country
- * aggregation in that case.
+ * present. Granularity wins on ties: if any code maps to a us-state /
+ * us-state-set, render at us-state level — country-target codes (like the
+ * FluSurv network-wide aggregate `US-FLUSURV-ALL`) and any unmapped codes
+ * are silently dropped from the highlighted set; the user can pick the
+ * country-aggregated fallback level (synthesised by `extendWithFallbacks`)
+ * to see them.
+ *
+ * Returns null only when *no* code in the level resolves to a known
+ * boundary — caller treats that as "render nothing at this level."
  */
 export function pickSyntheticTargetKind(
   ids: ReadonlySet<string>
 ): "us-state" | "country" | null {
   if (ids.size === 0) return null;
-  let allUsLike = true;
-  let allCountry = true;
+  let hasUsLike = false;
+  let hasCountry = false;
+  let hasMapped = false;
   for (const id of ids) {
     const t = SYNTHETIC_BOUNDARY_MAP[id];
-    if (!t) return null; // any unmapped → bail
-    if (t.kind !== "us-state" && t.kind !== "us-state-set") allUsLike = false;
-    if (t.kind !== "country") allCountry = false;
+    if (!t) continue; // unmapped codes drop out, but don't bail the whole level
+    hasMapped = true;
+    if (t.kind === "us-state" || t.kind === "us-state-set") hasUsLike = true;
+    else if (t.kind === "country") hasCountry = true;
   }
-  if (allUsLike) return "us-state";
-  if (allCountry) return "country";
+  if (!hasMapped) return null;
+  if (hasUsLike) return "us-state"; // granularity wins
+  if (hasCountry) return "country";
   return null;
 }

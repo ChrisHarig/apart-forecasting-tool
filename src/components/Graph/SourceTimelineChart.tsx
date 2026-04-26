@@ -2,7 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ListFilter, Plus, X } from "lucide-react";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipProps } from "recharts";
 import { detectCategoricalFields, detectDateField, detectNumericFields, type DatasetRow } from "../../data/hf/rows";
+import { aggregate, aggregationLabel, pickAggregation, type AggregationMethod } from "../../data/aggregation";
+import { BUILTIN_PERIOD_KINDS, periodKindLabel, type PeriodKind } from "../../data/periods";
 import type { SourceMetadata, ValueColumn } from "../../types/source";
+import { SeasonalChart } from "./SeasonalChart";
 
 interface Props {
   source: SourceMetadata;
@@ -31,45 +34,6 @@ const SINGLE_SERIES_KEY = "All";
 interface ActiveFilter {
   name: string;
   value: string;
-}
-
-type AggregationMethod = "sum" | "mean" | "max" | "min" | "count";
-
-function pickAggregation(meta: ValueColumn | undefined): AggregationMethod {
-  // Map the schema's `aggregation` field onto a function we know how to apply
-  // here. `rate` and `proportion` have no clean unweighted-average story so we
-  // also fall back to mean.
-  switch (meta?.aggregation) {
-    case "sum":
-    case "count":
-      return "sum";
-    case "max":
-      return "max";
-    case "mean":
-    case "rate":
-    case "proportion":
-      return "mean";
-    case "none":
-    default:
-      return "mean";
-  }
-}
-
-function aggregate(values: number[], method: AggregationMethod): number {
-  if (values.length === 0) return NaN;
-  switch (method) {
-    case "sum":
-      return values.reduce((a, b) => a + b, 0);
-    case "max":
-      return values.reduce((a, b) => (b > a ? b : a), -Infinity);
-    case "min":
-      return values.reduce((a, b) => (b < a ? b : a), Infinity);
-    case "count":
-      return values.length;
-    case "mean":
-    default:
-      return values.reduce((a, b) => a + b, 0) / values.length;
-  }
 }
 
 export function SourceTimelineChart({ source, rows }: Props) {
@@ -110,6 +74,13 @@ export function SourceTimelineChart({ source, rows }: Props) {
   }, [categoricalFields, groupBy]);
 
   const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
+
+  // Chart mode: time series (default) or seasonal (year-over-year overlay).
+  // Persisted only in component state for v1; promoting to pane state lives
+  // in FOLLOW_UPS #2's "what can be deferred" list.
+  const [chartMode, setChartMode] = useState<"time-series" | "seasonal">("time-series");
+  const [periodKindIdx, setPeriodKindIdx] = useState<number>(0); // index into BUILTIN_PERIOD_KINDS
+  const periodKind = BUILTIN_PERIOD_KINDS[periodKindIdx];
 
   const initRef = useRef(false);
   useEffect(() => {
@@ -316,6 +287,59 @@ export function SourceTimelineChart({ source, rows }: Props) {
 
   return (
     <div className="space-y-3">
+      {/* Chart-mode toggle: time-series vs seasonal overlay. Sits above the
+          Metric/Split-by/Filters row so the user can flip without losing
+          their column / filter selections. */}
+      <div className="flex items-center gap-2 text-xs">
+        <div className="inline-flex rounded-md border border-white/10 bg-white/[0.03] p-0.5">
+          <button
+            type="button"
+            onClick={() => setChartMode("time-series")}
+            aria-pressed={chartMode === "time-series"}
+            className={`rounded px-2 py-1 transition ${
+              chartMode === "time-series"
+                ? "bg-sky-700/40 text-sky-100"
+                : "text-neutral-300 hover:text-white"
+            }`}
+          >
+            Time series
+          </button>
+          <button
+            type="button"
+            onClick={() => setChartMode("seasonal")}
+            aria-pressed={chartMode === "seasonal"}
+            className={`rounded px-2 py-1 transition ${
+              chartMode === "seasonal"
+                ? "bg-sky-700/40 text-sky-100"
+                : "text-neutral-300 hover:text-white"
+            }`}
+          >
+            Seasonal
+          </button>
+        </div>
+        {chartMode === "seasonal" && (
+          <label className="flex items-center gap-1 text-[10px] uppercase text-neutral-400">
+            Period
+            <select
+              value={periodKindIdx}
+              onChange={(e) => setPeriodKindIdx(Number(e.target.value))}
+              className="rounded-md border border-white/10 bg-black/60 px-2 py-1 text-xs normal-case text-white"
+            >
+              {BUILTIN_PERIOD_KINDS.map((k, i) => (
+                <option key={i} value={i}>
+                  {periodKindLabel(k)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {chartMode === "seasonal" && groupBy !== NO_GROUP && (
+          <span className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-200">
+            Split-by ignored in seasonal mode (v1)
+          </span>
+        )}
+      </div>
+
       <div className="flex flex-wrap items-start gap-3 text-xs">
         {/* Metric */}
         <div className="flex min-h-[92px] min-w-[160px] flex-col gap-1 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2">
@@ -495,12 +519,21 @@ export function SourceTimelineChart({ source, rows }: Props) {
         )}
       </div>
 
-      {chartData.length === 0 || renderedGroupKeys.length === 0 ? (
+      {chartMode === "seasonal" ? (
+        <SeasonalChart
+          rows={rows}
+          dateField={dateField}
+          metric={metric}
+          aggMethod={aggMethod}
+          periodKind={periodKind}
+          activeFilters={activeFilters}
+        />
+      ) : chartData.length === 0 || renderedGroupKeys.length === 0 ? (
         <Empty
           body={
             chartData.length === 0
               ? "No rows match the current filters."
-              : "No series visible — pick at least one in the Group by panel."
+              : "No series visible — pick at least one in the Split by panel."
           }
         />
       ) : (
@@ -539,11 +572,6 @@ export function SourceTimelineChart({ source, rows }: Props) {
       )}
     </div>
   );
-}
-
-function aggregationLabel(method: AggregationMethod, declared: ValueColumn["aggregation"] | undefined): string {
-  if (declared && declared !== "none") return declared;
-  return method === "sum" ? "sum" : "mean";
 }
 
 interface SeriesPickerProps {
