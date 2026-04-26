@@ -43,3 +43,6 @@ data/private/*
 .DS_Store
 .idea/
 .vscode/
+
+# Local working notes
+dashboard-changes.md

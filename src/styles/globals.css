@@ -11,6 +11,12 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+html {
+  /* Reserve space for the vertical scrollbar so layout doesn't shift when
+     content grows past the viewport (e.g. expanding a Feed row). */
+  scrollbar-gutter: stable;
+}
+
 * {
   box-sizing: border-box;
 }

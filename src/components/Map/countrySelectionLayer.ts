@@ -8,7 +8,6 @@ export interface CountryFeatureProperties {
   iso3: string;
   isoNumeric: string;
   name: string;
-  sourceCoverageCount: number;
 }
 
 export type CountryFeatureCollection = FeatureCollection<Geometry, CountryFeatureProperties>;
@@ -19,7 +18,7 @@ type TopologyWithCountries = Topology<Objects<{ name?: string }>> & {
   };
 };
 
-export function buildCountrySelectionGeoJson(coverageCounts: Record<string, number> = {}): CountryFeatureCollection {
+export function buildCountryBoundariesGeoJson(): CountryFeatureCollection {
   const topology = countries50m as unknown as TopologyWithCountries;
   const collection = feature(topology, topology.objects.countries) as unknown as FeatureCollection<Geometry, { name?: string }>;
   const features = collection.features
@@ -32,15 +31,11 @@ export function buildCountrySelectionGeoJson(coverageCounts: Record<string, numb
         properties: {
           iso3: reference.iso3,
           isoNumeric,
-          name: countryFeature.properties?.name ?? reference.name,
-          sourceCoverageCount: coverageCounts[reference.iso3] ?? 0
+          name: countryFeature.properties?.name ?? reference.name
         }
       } satisfies Feature<Geometry, CountryFeatureProperties>;
     })
     .filter((item): item is Feature<Geometry, CountryFeatureProperties> => Boolean(item));
 
-  return {
-    type: "FeatureCollection",
-    features
-  };
+  return { type: "FeatureCollection", features };
 }

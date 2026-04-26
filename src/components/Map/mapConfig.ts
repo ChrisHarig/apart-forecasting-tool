@@ -1,18 +1,17 @@
 import type { StyleSpecification } from "maplibre-gl";
 
-export const DEFAULT_MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/positron";
+// Liberty has more detail than positron; falls back gracefully.
+export const DEFAULT_MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
 
 export const fallbackBoundaryStyle: StyleSpecification = {
   version: 8,
-  name: "Sentinel Atlas boundary fallback",
+  name: "EPI-Eval boundary fallback",
   sources: {},
   layers: [
     {
-      id: "sentinel-fallback-background",
+      id: "epieval-fallback-background",
       type: "background",
-      paint: {
-        "background-color": "#050505"
-      }
+      paint: { "background-color": "#050505" }
     }
   ]
 };
@@ -22,7 +21,7 @@ export const mapConfig = {
   fallbackStyle: fallbackBoundaryStyle,
   styleLoadTimeoutMs: 3500,
   initialCenter: [10, 20] as [number, number],
-  initialZoom: 1.25,
-  minZoom: 1,
-  maxZoom: 16
+  initialZoom: 1.4,
+  minZoom: 0,
+  maxZoom: 20
 };
