@@ -1,0 +1,106 @@
+pretty_name: COVID Tracking Project — US states daily (archived)
+license: cc-by-4.0
+size_categories:
+  - 10K<n<100K
+tags:
+  - cadence-daily
+  - geo-us
+  - surveillance-respiratory
+  - pathogen-sars-cov-2
+  - tier-3
+  - availability-inactive
+
+schema_version: "0.1"
+source_id: covid-tracking-project
+source_url: https://covidtracking.com/
+manifest_section: "§16.4"
+
+surveillance_category: respiratory
+pathogens:
+  - sars-cov-2
+
+availability: inactive
+availability_notes: "Project ended 2021-03-07. Static archive — no live updates."
+access_type: csv
+tier: 3
+
+cadence: daily
+geography_levels:
+  - subnational-state
+geography_countries:
+  - US
+
+gold_standard_for: []
+vintaged_version_of: null
+succeeds: null
+derived_from: []
+
+value_columns:
+  - name: positive
+    unit: cases (cumulative)
+    value_type: cumulative
+    description: Cumulative confirmed positives reported by the state
+    aggregation: max
+  - name: death
+    unit: deaths (cumulative)
+    value_type: cumulative
+    description: Cumulative confirmed COVID-19 deaths
+    aggregation: max
+  - name: hospitalizedCurrently
+    unit: patients
+    value_type: stock
+    description: Patients currently hospitalised with COVID-19 (point-in-time)
+    aggregation: mean
+  - name: inIcuCurrently
+    unit: patients
+    value_type: stock
+    description: Patients currently in ICU with COVID-19 (point-in-time)
+    aggregation: mean
+  - name: onVentilatorCurrently
+    unit: patients
+    value_type: stock
+    description: Patients currently on a ventilator with COVID-19 (point-in-time)
+    aggregation: mean
+  - name: totalTestResults
+    unit: tests (cumulative)
+    value_type: cumulative
+    description: Cumulative tests resulted (PCR + antigen mix; varies by state)
+    aggregation: max
+  - name: positiveIncrease
+    unit: cases/day
+    value_type: incident
+    description: Daily new positives (state-derived diff of `positive`)
+    aggregation: sum
+  - name: deathIncrease
+    unit: deaths/day
+    value_type: incident
+    description: Daily new deaths
+    aggregation: sum
+  - name: hospitalizedIncrease
+    unit: admissions/day
+    value_type: incident
+    description: Daily new hospitalisations (irregular reporting; many states never populated)
+    aggregation: sum
+  - name: totalTestResultsIncrease
+    unit: tests/day
+    value_type: incident
+    description: Daily new tests
+    aggregation: sum
+
+notes:
+  extra_columns:
+    - column: location_name
+      description: State postal code as reported. `location_id` is FIPS.
+  interpretation_caveats:
+    - column: hospitalizedIncrease
+      caveat: "Many states never reported daily new hospitalisations — column is NaN-heavy. Prefer NHSN HRD's `totalconfc19newadm` for analysis spanning 2020-08+."
+    - column: totalTestResults
+      caveat: "PCR / antigen mix differs by state and shifted over time. Don't compare raw test counts across states."
+  general: |
+    The COVID Tracking Project was a volunteer-run effort that ended 2021-03-07. State data
+    was assembled from each state's public dashboard, with curatorial corrections. Authoritative
+    until federal reporting (HHS Protect → NHSN HRD) caught up.
+
+extra:
+  archive_date: "2021-03-07"
+  successor: "hhs-protect (federal pickup), then nhsn-hrd"

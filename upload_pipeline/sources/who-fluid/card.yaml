@@ -1,0 +1,91 @@
+pretty_name: WHO FluID — global weekly ILI / SARI rates
+license: cc-by-nc-sa-3.0-igo
+size_categories:
+  - 100K<n<1M
+tags:
+  - cadence-weekly
+  - geo-global
+  - surveillance-respiratory
+  - pathogen-influenza
+  - tier-2
+  - availability-open
+
+schema_version: "0.1"
+source_id: who-fluid
+source_url: https://www.who.int/teams/global-influenza-programme/surveillance-and-monitoring/fluid
+manifest_section: "§5.2"
+
+surveillance_category: respiratory
+pathogens:
+  - influenza
+
+availability: open
+availability_notes: null
+access_type: api
+tier: 2
+
+cadence: weekly
+geography_levels:
+  - national
+geography_countries:
+  - multiple
+
+gold_standard_for: []
+vintaged_version_of: null
+succeeds: null
+derived_from: []
+
+value_columns:
+  - name: ILI_CASE
+    unit: cases/week
+    value_type: incident
+    description: ILI cases reported by sentinel sites this week
+    aggregation: sum
+  - name: ILI_OUTPATIENTS
+    unit: visits/week
+    value_type: incident
+    description: Total outpatient visits at sentinel sites (denominator for ILI rate)
+    aggregation: sum
+  - name: SARI_CASE
+    unit: cases/week
+    value_type: incident
+    description: Severe acute respiratory infection cases at sentinel hospitals
+    aggregation: sum
+  - name: SARI_INPATIENTS
+    unit: admissions/week
+    value_type: incident
+    description: Sentinel-hospital inpatient admissions (denominator for SARI rate)
+    aggregation: sum
+  - name: ARI_CASE
+    unit: cases/week
+    value_type: incident
+    description: Acute respiratory infection cases (broader than ILI in some networks)
+    aggregation: sum
+  - name: ARI_OUTPATIENTS
+    unit: visits/week
+    value_type: incident
+    description: ARI denominator
+    aggregation: sum
+  - name: PNEU_CASE
+    unit: cases/week
+    value_type: incident
+    description: Pneumonia cases (subset of countries report this)
+    aggregation: sum
+  - name: PNEU_DEATHS
+    unit: deaths/week
+    value_type: incident
+    description: Pneumonia deaths
+    aggregation: sum
+
+notes:
+  extra_columns:
+    - column: location_name
+      description: WHO country/area/territory name. `location_id` is ISO 3166-1 alpha-2.
+  interpretation_caveats:
+    - column: ILI_CASE
+      caveat: "ILI definition is country-specific (WHO recommends a standard but each country adapts). Don't compare absolute counts across countries; pair `ILI_CASE / ILI_OUTPATIENTS` for a comparable rate."
+  general: |
+    FluID is the syndromic complement to FluNet's virological data. Many countries publish only one of the two; coverage varies.
+
+extra:
+  pair_with: who-flunet

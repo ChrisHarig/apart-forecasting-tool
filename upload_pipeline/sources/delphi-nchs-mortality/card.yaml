@@ -1,0 +1,91 @@
+pretty_name: NCHS — weekly P&I + COVID-19 death certificate counts
+license: other
+size_categories:
+  - 10K<n<100K
+tags:
+  - cadence-weekly
+  - geo-us
+  - surveillance-mortality
+  - pathogen-influenza
+  - pathogen-sars-cov-2
+  - tier-2
+  - availability-open
+
+schema_version: "0.1"
+source_id: delphi-nchs-mortality
+source_url: https://gis.cdc.gov/grasp/fluview/mortality.html
+manifest_section: "§1.10"
+
+surveillance_category: mortality
+pathogens:
+  - influenza
+  - sars-cov-2
+
+availability: open
+availability_notes: "Lags 1-8 weeks behind real time as death certificates take time to file."
+access_type: delphi
+tier: 2
+
+cadence: weekly
+geography_levels:
+  - national
+  - subnational-state
+geography_countries:
+  - US
+
+gold_standard_for: []
+vintaged_version_of: null
+succeeds: null
+derived_from: []
+
+value_columns:
+  - name: covid_19_deaths
+    unit: deaths/week
+    value_type: incident
+    description: Death certificates listing COVID-19 as cause-of-death this week
+    aggregation: sum
+  - name: total_deaths
+    unit: deaths/week
+    value_type: incident
+    description: Total death certificates filed this week (denominator)
+    aggregation: sum
+  - name: percent_of_expected_deaths
+    unit: percent (0-100+)
+    value_type: index
+    description: Total deaths as % of NCHS-expected baseline (excess-mortality indicator)
+    aggregation: mean
+  - name: pneumonia_deaths
+    unit: deaths/week
+    value_type: incident
+    description: Death certificates listing pneumonia
+    aggregation: sum
+  - name: pneumonia_and_covid_19_deaths
+    unit: deaths/week
+    value_type: incident
+    description: Death certificates listing both pneumonia AND COVID-19
+    aggregation: sum
+  - name: influenza_deaths
+    unit: deaths/week
+    value_type: incident
+    description: Death certificates listing influenza
+    aggregation: sum
+  - name: pneumonia_influenza_or_covid_19_deaths
+    unit: deaths/week
+    value_type: incident
+    description: Death certificates listing P, I, or C — the headline P&I+C combined indicator
+    aggregation: sum
+
+notes:
+  extra_columns:
+    - column: location_name
+      description: Source-native code (`us`, `ca`, ...). `location_id` is canonical.
+  interpretation_caveats:
+    - column: covid_19_deaths
+      caveat: "Multiple-cause-of-death column — counts certificates *listing* COVID, not necessarily the underlying cause. Larger than the 'underlying-cause' COVID death count."
+  general: |
+    NCHS death certificate counts lag real time by 1-8 weeks. Treat the most-recent 4 weeks
+    as provisional; later revisions can be substantial.
+
+extra:
+  delphi_endpoint: https://api.delphi.cmu.edu/epidata/nchs_mortality/
+  vintaging_note: Delphi preserves `as_of` revisions for this source.

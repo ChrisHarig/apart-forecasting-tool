@@ -1,0 +1,68 @@
+pretty_name: CDC NREVSS — weekly RSV test specimens and positives
+license: other
+size_categories:
+  - 10K<n<100K
+tags:
+  - cadence-weekly
+  - geo-us
+  - surveillance-respiratory
+  - pathogen-rsv
+  - tier-2
+  - availability-open
+
+schema_version: "0.1"
+source_id: cdc-nrevss-rsv
+source_url: https://www.cdc.gov/nrevss/php/dashboard/index.html
+manifest_section: "§1.6"
+
+surveillance_category: respiratory
+pathogens:
+  - rsv
+
+availability: open
+availability_notes: null
+access_type: socrata
+tier: 2
+
+cadence: weekly
+geography_levels:
+  - subnational-region
+geography_countries:
+  - US
+
+gold_standard_for: []
+vintaged_version_of: null
+succeeds: null
+derived_from: []
+
+value_columns:
+  - name: rsvpos
+    unit: specimens/week
+    value_type: incident
+    description: Specimens testing positive for RSV (this test type, this region, this week)
+    aggregation: sum
+  - name: rsvtest
+    unit: specimens/week
+    value_type: incident
+    description: Total specimens tested for RSV
+    aggregation: sum
+
+notes:
+  extra_columns:
+    - column: testtype
+      description: "`Antigen` or `PCR`. Always 2 rows per (date, region) — one per test type. Treat as a row-level dimension; downstream % positive is computed per testtype."
+    - column: outlier
+      description: 1 = source itself flagged this point as an outlier (excluded from CDC's published trend).
+    - column: location_name
+      description: "`HHS N` for traceability. `location_id` (`US-HHS-N`) is canonical."
+  interpretation_caveats:
+    - column: rsvtest
+      caveat: "PCR vs antigen counts are NOT comparable. PCR ramped up post-2018; antigen has been the long-term backbone but is less sensitive. Don't sum across testtype — they're parallel signals."
+  general: |
+    NREVSS is the long-running multi-pathogen lab network. The full system covers flu,
+    RSV, parainfluenza, hMPV, adenovirus, etc.; this Socrata view exposes only the
+    RSV portion. Other pathogens are in sibling Socrata datasets (separate ingests).
+
+extra:
+  pathogens_in_sibling_datasets: ["influenza-a/b → fluview_clinical (Delphi)", "hMPV / adenovirus / parainfluenza → separate Socrata ids"]
+  source_columns_omitted: 1 (`season` — derivable from `date`)

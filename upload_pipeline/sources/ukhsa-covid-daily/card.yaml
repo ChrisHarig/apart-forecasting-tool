@@ -1,0 +1,89 @@
+pretty_name: UKHSA Dashboard — England COVID-19 daily metrics
+license: other
+license_name: ogl-uk-3.0
+license_link: https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/
+size_categories:
+  - 1K<n<10K
+tags:
+  - cadence-daily
+  - geo-gb
+  - surveillance-respiratory
+  - pathogen-sars-cov-2
+  - tier-2
+  - availability-open
+
+schema_version: "0.1"
+source_id: ukhsa-covid-daily
+source_url: https://ukhsa-dashboard.data.gov.uk/
+manifest_section: "§5.5 (COVID daily subset)"
+
+surveillance_category: respiratory
+pathogens:
+  - sars-cov-2
+
+availability: open
+availability_notes: "API is in beta — schema may shift between minor versions."
+access_type: api
+tier: 2
+
+cadence: daily
+geography_levels:
+  - subnational-state
+geography_countries:
+  - GB
+
+gold_standard_for: []
+vintaged_version_of: null
+succeeds: null
+derived_from: []
+
+value_columns:
+  - name: cases
+    unit: cases/day
+    value_type: incident
+    description: Confirmed COVID-19 cases reported on this date.
+    aggregation: sum
+  - name: admissions
+    unit: admissions/day
+    value_type: incident
+    description: Hospital admissions with COVID-19, daily count.
+    aggregation: sum
+  - name: occupied_beds
+    unit: beds
+    value_type: stock
+    description: Hospital beds occupied by patients with COVID-19 (point-in-time).
+    aggregation: mean
+  - name: deaths_ons
+    unit: deaths/day
+    value_type: incident
+    description: ONS-registered deaths with COVID-19 mentioned, daily.
+    aggregation: sum
+  - name: pcr_tests
+    unit: tests/day
+    value_type: incident
+    description: PCR tests resulted, daily.
+    aggregation: sum
+
+notes:
+  extra_columns:
+    - column: location_name
+      description: Always 'England'. NHS regions / devolved nations would be separate sources.
+  interpretation_caveats:
+    - column: deaths_ons
+      caveat: |
+        ONS-registered deaths lag by ~10 days vs. event date and use 'mentioned on the
+        certificate' criteria, not 'underlying cause'. Different denominator from PHE/UKHSA's
+        own death counts (which used '28 days from positive test').
+    - column: cases
+      caveat: |
+        Free symptomatic-testing access ended in England 2022-04-01. Post-2022 case counts
+        reflect remaining clinical / hospital testing only and are not comparable to the
+        free-testing era.
+  general: |
+    Sibling source to `ukhsa-respiratory` (weekly multi-pathogen). Split out because the
+    daily-cadence + count-based units of these metrics don't pivot cleanly into the weekly
+    per-100k rates the parent dataset uses for flu/RSV.
+
+extra:
+  parent_source: ukhsa-respiratory
+  api_swagger: https://api.ukhsa-dashboard.data.gov.uk/api/swagger/

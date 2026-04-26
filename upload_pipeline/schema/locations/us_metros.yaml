@@ -1,0 +1,131 @@
+# US metro / sub-state catchment registry.
+#
+# Sub-state geographies don't have a global standard (ISO 3166-2 stops at
+# state level). For US metros and similar non-FIPS aggregations we use the
+# synthetic prefix `US-METRO-<id>` (per schema_v0.1 location-id rules).
+# This file is the canonical mapping from synthetic id → display name for
+# every metro / catchment / sub-state aggregate the org's datasets reference.
+#
+# Adding a metro: PR against this file. The synthetic id should be a stable
+# slug (uppercase, alphanumeric + hyphens) — it does NOT need to match an
+# external standard.
+
+schema_version: "0.1"
+
+codes:
+  # MetroCast hub metros (extracted 2026-04-26 from flu-metrocast-hub.parquet).
+  # The hub mixes city-level and state-level series under one prefix; the
+  # display name reflects the hub's source name. Sub-state aggregates that
+  # happen to be state-named (e.g. 'Texas', 'Georgia') are MetroCast's
+  # state-wide aggregate row, not duplicates of state FIPS data.
+  US-METRO-ATHENS: "Athens"
+  US-METRO-AUSTIN: "Austin"
+  US-METRO-BALTIMORE: "Baltimore"
+  US-METRO-BANGOR: "Bangor"
+  US-METRO-BEAUMONT: "Beaumont"
+  US-METRO-BOSTON: "Boston"
+  US-METRO-BOULDER: "Boulder"
+  US-METRO-CHARLESTON: "Charleston"
+  US-METRO-CHEROKEE: "Cherokee"
+  US-METRO-CLTAREA: "Charlotte (CLT) area"
+  US-METRO-COLORADO: "Colorado (state aggregate)"
+  US-METRO-COLORADOSPRINGS: "Colorado Springs"
+  US-METRO-COLUMBIA: "Columbia"
+  US-METRO-COLUMBUS: "Columbus"
+  US-METRO-DALLAS: "Dallas"
+  US-METRO-DENVER: "Denver"
+  US-METRO-DESCHUTES: "Deschutes"
+  US-METRO-DULUTH: "Duluth"
+  US-METRO-ELPASO: "El Paso"
+  US-METRO-EUGENE: "Eugene"
+  US-METRO-FAYAREA: "Fayetteville (Fay) area"
+  US-METRO-FLORENCE: "Florence"
+  US-METRO-FLOYD: "Floyd"
+  US-METRO-FREDERICK: "Frederick"
+  US-METRO-GEORGIA: "Georgia (state aggregate)"
+  US-METRO-GREENVILLE: "Greenville"
+  US-METRO-HALL: "Hall"
+  US-METRO-HARFORD: "Harford"
+  US-METRO-HENRY: "Henry"
+  US-METRO-HORRY: "Horry"
+  US-METRO-HOUSTON: "Houston"
+  US-METRO-INDIANA: "Indiana (state aggregate)"
+  US-METRO-INDIANAPOLIS: "Indianapolis"
+  US-METRO-LACOUNTY: "Los Angeles County, CA"
+  US-METRO-LAGRANGE: "La Grange"
+  US-METRO-LARIMER: "Larimer"
+  US-METRO-LYNN: "Lynn"
+  US-METRO-MACON: "Macon"
+  US-METRO-MAINE: "Maine (state aggregate)"
+  US-METRO-MARIETTA: "Marietta"
+  US-METRO-MARYLAND: "Maryland (state aggregate)"
+  US-METRO-MASSACHUSETTS: "Massachusetts (state aggregate)"
+  US-METRO-MEDFORD: "Medford"
+  US-METRO-MESA: "Mesa"
+  US-METRO-MINNEAPOLIS: "Minneapolis"
+  US-METRO-MINNESOTA: "Minnesota (state aggregate)"
+  US-METRO-MONTGOMERY: "Montgomery"
+  US-METRO-NENC: "North-Eastern North Carolina (NENC)"
+  US-METRO-NEWBEDFORD: "New Bedford"
+  US-METRO-NORTHCAROLINA: "North Carolina (state aggregate)"
+  US-METRO-NYC: "New York City (5 boroughs)"
+  US-METRO-OGDEN: "Ogden"
+  US-METRO-OREGON: "Oregon (state aggregate)"
+  US-METRO-PITTSFIELD: "Pittsfield"
+  US-METRO-PORTLAND: "Portland"
+  US-METRO-PORTLANDOR: "Portland, OR"
+  US-METRO-PROVO: "Provo"
+  US-METRO-ROANOKE: "Roanoke"
+  US-METRO-ROCHESTER: "Rochester"
+  US-METRO-ROCKHILL: "Rock Hill"
+  US-METRO-RTPAREA: "Research Triangle Park (RTP) area, NC"
+  US-METRO-SALEM: "Salem"
+  US-METRO-SALTLAKECITY: "Salt Lake City"
+  US-METRO-SANANTONIO: "San Antonio"
+  US-METRO-SAVANNAH: "Savannah"
+  US-METRO-SENC: "South-Eastern North Carolina (SENC)"
+  US-METRO-SOUTHAUGUSTA: "South Augusta"
+  US-METRO-SOUTHCAROLINA: "South Carolina (state aggregate)"
+  US-METRO-SPRINGFIELD: "Springfield"
+  US-METRO-STCLOUD: "St. Cloud"
+  US-METRO-STPAUL: "St. Paul"
+  US-METRO-TEXAS: "Texas (state aggregate)"
+  US-METRO-TRIADAREA: "Triad area, NC"
+  US-METRO-UTAH: "Utah (state aggregate)"
+  US-METRO-VIRGINIA: "Virginia (state aggregate)"
+  US-METRO-WELD: "Weld"
+  US-METRO-WNC: "Western North Carolina (WNC)"
+  US-METRO-WORCESTER: "Worcester"
+  # Other US metros referenced by sources (placeholders — populated lazily).
+  US-METRO-CHICAGO: "Chicago metro, IL"
+  US-METRO-PHOENIX: "Phoenix metro, AZ"
+  US-METRO-PHILADELPHIA: "Philadelphia metro, PA"
+
+# Catchment-style aggregations that aren't strictly metros. FluSurv-NET
+# catchments live under their own slug pattern but go in this file because
+# the dashboard treats them as sub-state aggregates.
+catchment_codes:
+  US-FLUSURV-CA: "California — RESP-NET catchment"
+  US-FLUSURV-CO: "Colorado — RESP-NET catchment"
+  US-FLUSURV-CT: "Connecticut — RESP-NET catchment"
+  US-FLUSURV-GA: "Georgia — RESP-NET catchment"
+  US-FLUSURV-MD: "Maryland — RESP-NET catchment"
+  US-FLUSURV-MI: "Michigan — RESP-NET catchment"
+  US-FLUSURV-MN: "Minnesota — RESP-NET catchment"
+  US-FLUSURV-NM: "New Mexico — RESP-NET catchment"
+  US-FLUSURV-NY-ALBANY: "New York (Albany) — RESP-NET catchment"
+  US-FLUSURV-NY-ROCHESTER: "New York (Rochester) — RESP-NET catchment"
+  US-FLUSURV-OR: "Oregon — RESP-NET catchment"
+  US-FLUSURV-TN: "Tennessee — RESP-NET catchment"
+  US-FLUSURV-UT: "Utah — RESP-NET catchment"
+  US-FLUSURV-ALL: "RESP-NET network-wide aggregate"
+  US-HHS-1: "HHS Region 1 (CT, ME, MA, NH, RI, VT)"
+  US-HHS-2: "HHS Region 2 (NJ, NY, PR, VI)"
+  US-HHS-3: "HHS Region 3 (DE, DC, MD, PA, VA, WV)"
+  US-HHS-4: "HHS Region 4 (AL, FL, GA, KY, MS, NC, SC, TN)"
+  US-HHS-5: "HHS Region 5 (IL, IN, MI, MN, OH, WI)"
+  US-HHS-6: "HHS Region 6 (AR, LA, NM, OK, TX)"
+  US-HHS-7: "HHS Region 7 (IA, KS, MO, NE)"
+  US-HHS-8: "HHS Region 8 (CO, MT, ND, SD, UT, WY)"
+  US-HHS-9: "HHS Region 9 (AZ, CA, HI, NV, AS, GU, MP)"
+  US-HHS-10: "HHS Region 10 (AK, ID, OR, WA)"

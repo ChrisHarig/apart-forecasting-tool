@@ -1,0 +1,89 @@
+pretty_name: PHAC Respiratory Virus Detection Surveillance — Canada weekly
+license: other
+license_name: ogl-canada-2.0
+license_link: https://open.canada.ca/en/open-government-licence-canada
+size_categories:
+  - 10K<n<100K
+tags:
+  - cadence-weekly
+  - geo-ca
+  - surveillance-respiratory
+  - pathogen-influenza
+  - pathogen-sars-cov-2
+  - pathogen-rsv
+  - tier-2
+  - availability-open
+
+schema_version: "0.1"
+source_id: canada-fluwatch
+source_url: https://health-infobase.canada.ca/respiratory-virus-surveillance/
+manifest_section: "§5.6"
+
+surveillance_category: respiratory
+pathogens:
+  - influenza
+  - influenza-a
+  - influenza-b
+  - sars-cov-2
+  - rsv
+  - hmpv
+  - adenovirus
+  - parainfluenza
+  - rhinovirus-enterovirus
+  - seasonal-coronavirus
+
+availability: open
+availability_notes: null
+access_type: csv
+tier: 2
+
+cadence: weekly
+geography_levels:
+  - national
+  - subnational-state
+  - subnational-region
+geography_countries:
+  - CA
+
+gold_standard_for: []
+vintaged_version_of: null
+succeeds: null
+derived_from: []
+
+value_columns:
+  - name: tests
+    unit: specimens/week
+    value_type: incident
+    description: Number of specimens tested for this virus, this region, this week
+    aggregation: sum
+  - name: detections
+    unit: positives/week
+    value_type: incident
+    description: Number of specimens that detected this virus
+    aggregation: sum
+  - name: percentpositive
+    unit: percent (0-100)
+    value_type: proportion
+    description: Share of specimens positive (`detections / tests`)
+    aggregation: rate
+
+notes:
+  extra_columns:
+    - column: condition_native
+      description: PHAC virus name (`SARS-CoV-2`, `Influenza A`, `RSV`, ...). `condition` is the EPI-Eval slug.
+    - column: location_name
+      description: Province / territory / region name from PHAC. `location_id` is canonical.
+  interpretation_caveats:
+    - column: condition
+      caveat: "Includes 'adenovirus', 'parainfluenza', 'rhinovirus-enterovirus', 'seasonal-coronavirus' which are *not yet in vocabularies.yaml*. Adding them is recommended (low-cost extension)."
+    - column: percentpositive
+      caveat: "PHAC reports % to 1 decimal; small jurisdictions can swing widely week-to-week."
+  general: |
+    PHAC publishes a single weekly CSV. Long-format with one row per
+    (date × jurisdiction × virus). The dataset replaces FluWatch+ as Canada's
+    multi-virus respiratory surveillance feed. Note that some "regions" are PHAC
+    rollups (Atlantic, Prairies) sitting alongside individual provinces.
+extra:
+  source_columns_omitted: 2 (week, weekorder, year — derivable from date)
+  vocabularies_extension_request:
+    - new_pathogens: ["adenovirus", "parainfluenza", "rhinovirus-enterovirus", "seasonal-coronavirus"]

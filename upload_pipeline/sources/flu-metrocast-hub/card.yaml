@@ -1,0 +1,63 @@
+pretty_name: Flu MetroCast Hub — sub-state flu hosp forecast target
+license: cc-by-4.0
+size_categories:
+  - 10K<n<100K
+tags:
+  - cadence-weekly
+  - geo-us
+  - surveillance-respiratory
+  - pathogen-influenza
+  - tier-2
+  - availability-open
+
+schema_version: "0.1"
+source_id: flu-metrocast-hub
+source_url: https://reichlab.io/metrocast-dashboard/
+manifest_section: "§4.6"
+
+surveillance_category: respiratory
+pathogens:
+  - influenza
+
+availability: open
+availability_notes: null
+access_type: github
+tier: 2
+
+cadence: weekly
+geography_levels:
+  - subnational-city
+geography_countries:
+  - US
+
+gold_standard_for: []
+vintaged_version_of: null
+succeeds: null
+derived_from: []
+
+value_columns:
+  - name: value
+    unit: admissions/week
+    value_type: incident
+    description: Flu hospital admissions / ED visits for the metro area
+    aggregation: sum
+
+notes:
+  extra_columns:
+    - column: target
+      description: Hubverse target identifier (e.g. 'wk inc flu hosp metro').
+    - column: location_name
+      description: MetroCast metro identifier (city / county). `location_id` is `US-METRO-<id>` synthetic.
+  interpretation_caveats:
+    - column: value
+      caveat: |
+        Metro definitions vary by jurisdiction (NYC = 5 boroughs; LA = LA County; etc.).
+        Don't sum metros to recover state — they don't tile cleanly.
+  general: |
+    Truth-only ingest, model forecasts handled separately.
+
+extra:
+  schema_proposal: |
+    `subnational-city` location level needed a synthetic prefix (`US-METRO-`) because the
+    schema's regex for that level is permissive but un-anchored to a registry. Worth
+    formalising: maintain a `metro_registry.yaml` with city codes and human names.

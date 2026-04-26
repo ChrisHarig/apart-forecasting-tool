@@ -1,0 +1,83 @@
+pretty_name: CDC FluSurv-NET — weekly flu hospitalisation rates
+license: other
+size_categories:
+  - 10K<n<100K
+tags:
+  - cadence-weekly
+  - geo-us
+  - surveillance-respiratory
+  - pathogen-influenza
+  - tier-2
+  - availability-open
+
+schema_version: "0.1"
+source_id: delphi-flusurv
+source_url: https://www.cdc.gov/resp-net/dashboard/index.html
+manifest_section: "§1.3"
+
+surveillance_category: respiratory
+pathogens:
+  - influenza
+
+availability: open
+availability_notes: null
+access_type: delphi
+tier: 2
+
+cadence: weekly
+geography_levels:
+  - subnational-region
+geography_countries:
+  - US
+
+gold_standard_for: []
+vintaged_version_of: null
+succeeds: null
+derived_from: []
+
+value_columns:
+  - name: rate_overall
+    unit: per 100k population
+    value_type: rate
+    description: Weekly flu-confirmed hospitalisation rate, all ages, this catchment
+    aggregation: rate
+  - name: rate_age_0
+    unit: per 100k population
+    value_type: rate
+    description: Hospitalisation rate, age 0-4
+    aggregation: rate
+  - name: rate_age_1
+    unit: per 100k population
+    value_type: rate
+    description: Hospitalisation rate, age 5-17
+    aggregation: rate
+  - name: rate_age_2
+    unit: per 100k population
+    value_type: rate
+    description: Hospitalisation rate, age 18-49
+    aggregation: rate
+  - name: rate_age_3
+    unit: per 100k population
+    value_type: rate
+    description: Hospitalisation rate, age 50-64
+    aggregation: rate
+  - name: rate_age_4
+    unit: per 100k population
+    value_type: rate
+    description: Hospitalisation rate, age 65+
+    aggregation: rate
+
+notes:
+  extra_columns:
+    - column: location_name
+      description: Source-native catchment code (e.g. `CA`, `NY_albany`, `network_all`). `location_id` prefixes with `US-FLUSURV-`.
+  interpretation_caveats:
+    - column: rate_overall
+      caveat: |
+        FluSurv-NET catchments are *not* whole-state populations. CA covers selected counties
+        in the SF Bay Area; NY has separate Albany and Rochester catchments. Don't compare
+        catchment rates to state-level flu rates from other sources without re-weighting.
+  general: |
+    14 RESP-NET catchments (some states host two — NY: Albany + Rochester) plus a `network_all`
+    aggregate. Seasonal — typically populated October through May. Pre-2018 the network was
+    smaller (FluSurv-NET predecessors operated different sites).

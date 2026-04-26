@@ -1,0 +1,66 @@
+pretty_name: NYT COVID-19 — US county daily
+license: other  # NYT custom data license — non-commercial use ok, commercial requires perm
+size_categories:
+  - 1M<n<10M
+tags:
+  - cadence-daily
+  - geo-us
+  - surveillance-respiratory
+  - pathogen-sars-cov-2
+  - tier-3
+  - availability-open
+
+schema_version: "0.1"
+source_id: nyt-covid
+source_url: https://github.com/nytimes/covid-19-data
+manifest_section: "§16.5"
+
+surveillance_category: respiratory
+pathogens:
+  - sars-cov-2
+
+availability: open
+availability_notes: "NYT custom license — non-commercial use ok, commercial use requires permission."
+access_type: github
+tier: 3
+
+cadence: daily
+geography_levels:
+  - subnational-county
+geography_countries:
+  - US
+
+gold_standard_for: []
+vintaged_version_of: null
+succeeds: null
+derived_from: []
+
+value_columns:
+  - name: cases
+    unit: cases (cumulative)
+    value_type: cumulative
+    description: Cumulative confirmed + probable COVID-19 cases since pandemic start
+    aggregation: max
+  - name: deaths
+    unit: deaths (cumulative)
+    value_type: cumulative
+    description: Cumulative confirmed + probable COVID-19 deaths since pandemic start
+    aggregation: max
+
+notes:
+  extra_columns:
+    - column: location_name
+      description: NYT-supplied county + state name. Useful for traceability when a FIPS code resolves ambiguously (e.g. NYC's five boroughs collapsed into a single 'New York City' row).
+  interpretation_caveats:
+    - column: cases
+      caveat: |
+        Cumulative — diff to recover incident. NYT collapses the five NYC boroughs (FIPS 36005, 36047, 36061, 36081, 36085)
+        into a synthetic 'New York City' row that this ingest **drops** (no FIPS). Pre-2020-08 some rural counties were
+        bundled with neighbours; the README documents the carve-outs.
+  general: |
+    Archived March 2023. Useful as an early-pandemic baseline at county granularity
+    when nothing finer than state was available from federal sources.
+
+extra:
+  source_columns_omitted: 0
+  archive_note: "Series stops 2023-03-23; the upstream maintained the file but no longer updates it."

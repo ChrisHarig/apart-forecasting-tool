@@ -1,0 +1,81 @@
+# NNDSS label → EPI-Eval condition slug mapping.
+#
+# CDC NNDSS publishes 120+ condition labels in long-format. Most map to a
+# `pathogens` or `conditions` slug from `vocabularies.yaml`; a small number
+# fall through to `condition: unknown` until someone classifies them.
+#
+# This file is the source of truth for the mapping — `upload_pipeline/sources/
+# cdc-nndss/ingest.py` reads it at ingest time. Adding a new NNDSS label is a
+# PR against this file, not against the ingest module.
+#
+# Format: each entry is a label-prefix match. The first matching entry wins
+# (entries are checked in declaration order). `prefix` matches via
+# `label.startswith(prefix)`. `slug` must exist in vocabularies.yaml under
+# `pathogens` (when `type: pathogen`) or `conditions` (when `type: syndrome`,
+# `exposure`, or `outcome`).
+
+schema_version: "0.1"
+
+mappings:
+  # ── Respiratory ──
+  - {prefix: "Influenza-associated pediatric mortality", slug: influenza,            type: pathogen}
+  - {prefix: "COVID-19",                                  slug: sars-cov-2,           type: pathogen}
+  - {prefix: "Respiratory syncytial virus",               slug: rsv,                  type: pathogen}
+  - {prefix: "Pertussis",                                 slug: pertussis,            type: pathogen}
+
+  # ── Vaccine-preventable ──
+  - {prefix: "Measles",                                   slug: measles,              type: pathogen}
+  - {prefix: "Mumps",                                     slug: mumps,                type: pathogen}
+  - {prefix: "Rubella",                                   slug: rubella,              type: pathogen}
+  - {prefix: "Varicella",                                 slug: varicella,            type: pathogen}
+  - {prefix: "Polio",                                     slug: polio,                type: pathogen}
+  - {prefix: "Hepatitis A",                               slug: hepatitis-a,          type: pathogen}
+  - {prefix: "Hepatitis B",                               slug: hepatitis-b,          type: pathogen}
+  - {prefix: "Hepatitis C",                               slug: hepatitis-c,          type: pathogen}
+
+  # ── Pox ──
+  - {prefix: "Mpox",                                      slug: mpox,                 type: pathogen}
+  - {prefix: "Monkeypox",                                 slug: mpox,                 type: pathogen}
+
+  # ── Enteric ──
+  - {prefix: "Salmonellosis",                             slug: salmonella,           type: pathogen}
+  - {prefix: "Shiga toxin-producing E",                   slug: e-coli-stec,          type: pathogen}
+  - {prefix: "Listeriosis",                               slug: listeria,             type: pathogen}
+  - {prefix: "Shigellosis",                               slug: shigella,             type: pathogen}
+  - {prefix: "Campylobacteriosis",                        slug: campylobacter,        type: pathogen}
+  - {prefix: "Cholera",                                   slug: cholera,              type: pathogen}
+
+  # ── Vector-borne / arboviral ──
+  - {prefix: "Arboviral diseases, West Nile",             slug: west-nile,            type: pathogen}
+  - {prefix: "Arboviral diseases, Chikungunya",           slug: chikungunya,          type: pathogen}
+  - {prefix: "Arboviral diseases, Dengue",                slug: dengue,               type: pathogen}
+  - {prefix: "Arboviral diseases, Zika",                  slug: zika,                 type: pathogen}
+  - {prefix: "Yellow fever",                              slug: yellow-fever,         type: pathogen}
+  - {prefix: "Malaria",                                   slug: malaria,              type: pathogen}
+  - {prefix: "Lyme disease",                              slug: lyme,                 type: pathogen}
+  - {prefix: "Leptospirosis",                             slug: leptospirosis,        type: pathogen}
+
+  # ── Bacterial / notifiable ──
+  - {prefix: "Tuberculosis",                              slug: tuberculosis,         type: pathogen}
+  - {prefix: "Legionellosis",                             slug: legionella,           type: pathogen}
+  - {prefix: "Q fever",                                   slug: q-fever,              type: pathogen}
+  - {prefix: "Anthrax",                                   slug: anthrax,              type: pathogen}
+  - {prefix: "Botulism",                                  slug: botulism,             type: pathogen}
+  - {prefix: "Hansen",                                    slug: hansens-disease,      type: pathogen}
+
+  # ── Other infectious ──
+  - {prefix: "Hand, foot, and mouth",                     slug: hand-foot-mouth,      type: pathogen}
+  - {prefix: "HIV",                                       slug: hiv,                  type: pathogen}
+
+  # ── Syndromes ──
+  - {prefix: "Acute flaccid myelitis",                    slug: acute-flaccid-myelitis, type: syndrome}
+
+  # ── Exposures ──
+  - {prefix: "Lead",                                      slug: lead-exposure,        type: exposure}
+  - {prefix: "Carbon monoxide",                           slug: carbon-monoxide-poisoning, type: exposure}
+
+  # Labels that are real but unmapped — we want to surface them rather than
+  # silently bucket as `unknown`. Add explicit unmapped entries below as you
+  # encounter them so the gap is visible.
+  # - {prefix: "Pneumococcal",                            slug: unknown,              type: pathogen}
+  # - {prefix: "Meningococcal",                           slug: unknown,              type: pathogen}

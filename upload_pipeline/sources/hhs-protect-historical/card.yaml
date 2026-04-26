@@ -1,0 +1,116 @@
+pretty_name: HHS Protect (historical) — US state daily hosp capacity 2020-2024
+license: other
+size_categories:
+  - 100K<n<1M
+tags:
+  - cadence-daily
+  - geo-us
+  - surveillance-respiratory
+  - pathogen-sars-cov-2
+  - tier-3
+  - availability-inactive
+
+schema_version: "0.1"
+source_id: hhs-protect-historical
+source_url: https://healthdata.gov/Hospital/COVID-19-Reported-Patient-Impact-and-Hospital-Capa/g62h-syeh
+manifest_section: "§1.7"
+
+surveillance_category: respiratory
+pathogens:
+  - sars-cov-2
+
+availability: inactive
+availability_notes: "HHS Protect ended 2024-10. Static archive; no updates."
+access_type: socrata
+tier: 3
+
+cadence: daily
+geography_levels:
+  - subnational-state
+geography_countries:
+  - US
+
+gold_standard_for: []
+vintaged_version_of: null
+succeeds: null
+derived_from: []
+
+value_columns:
+  - name: inpatient_beds
+    unit: beds
+    value_type: stock
+    description: Total reported inpatient beds (state daily total)
+    aggregation: mean
+  - name: inpatient_beds_used
+    unit: beds
+    value_type: stock
+    description: Total inpatient beds in use (any cause)
+    aggregation: mean
+  - name: inpatient_beds_used_covid
+    unit: beds
+    value_type: stock
+    description: Inpatient beds occupied by confirmed + suspected COVID patients
+    aggregation: mean
+  - name: previous_day_admission_adult_covid_confirmed
+    unit: admissions/day
+    value_type: incident
+    description: New adult COVID-confirmed admissions reported in the previous 24h
+    aggregation: sum
+  - name: previous_day_admission_adult_covid_suspected
+    unit: admissions/day
+    value_type: incident
+    description: New adult COVID-suspected admissions previous 24h
+    aggregation: sum
+  - name: previous_day_admission_pediatric_covid_confirmed
+    unit: admissions/day
+    value_type: incident
+    description: Pediatric COVID-confirmed admissions previous 24h
+    aggregation: sum
+  - name: previous_day_admission_pediatric_covid_suspected
+    unit: admissions/day
+    value_type: incident
+    description: Pediatric COVID-suspected admissions previous 24h
+    aggregation: sum
+  - name: staffed_adult_icu_bed_occupancy
+    unit: beds
+    value_type: stock
+    description: Adult ICU beds occupied (any cause)
+    aggregation: mean
+  - name: staffed_icu_adult_patients_confirmed_and_suspected_covid
+    unit: patients
+    value_type: stock
+    description: Adult ICU patients with confirmed + suspected COVID
+    aggregation: mean
+  - name: total_adult_patients_hospitalized_confirmed_and_suspected_covid
+    unit: patients
+    value_type: stock
+    description: Total adult inpatients with confirmed + suspected COVID
+    aggregation: mean
+  - name: total_pediatric_patients_hospitalized_confirmed_and_suspected_covid
+    unit: patients
+    value_type: stock
+    description: Total pediatric inpatients with confirmed + suspected COVID
+    aggregation: mean
+  - name: deaths_covid
+    unit: deaths/day
+    value_type: incident
+    description: COVID-19 deaths reported by hospitals (different denominator from NCHS)
+    aggregation: sum
+
+notes:
+  extra_columns:
+    - column: location_name
+      description: 2-letter postal code as published. `location_id` is FIPS.
+  interpretation_caveats:
+    - column: previous_day_admission_adult_covid_confirmed
+      caveat: "Reporting was *voluntary* 2020-07-15 → 2020-08-04 and again 2024-05-01 → 2024-11-09; coverage drops sharply during voluntary periods."
+    - column: total_adult_patients_hospitalized_confirmed_and_suspected_covid
+      caveat: "Includes *suspected* COVID — many hospitals reported probable cases during 2020 when testing was scarce. Pre-2021 numbers run higher than confirmed-only."
+  general: |
+    Predecessor to NHSN HRD. The two cannot be naively spliced (`succeeds` relation in NHSN HRD's
+    card). HHS Protect is daily and includes adult/peds split; NHSN HRD is weekly and lacks the
+    daily granularity. Use this for high-frequency analysis 2020-07 → 2024-10.
+
+extra:
+  source_columns_omitted: ~80 (many overlapping coverage / staffing-shortage indicators; we kept the headline capacity + admissions cluster)
+  successor: nhsn-hrd

@@ -1,0 +1,83 @@
+pretty_name: CDC NWSS — public SARS-CoV-2 wastewater metric (site-level)
+license: other  # US federal works
+size_categories:
+  - 100K<n<1M
+tags:
+  - cadence-weekly
+  - geo-us
+  - surveillance-wastewater
+  - pathogen-sars-cov-2
+  - tier-3
+  - availability-open
+
+schema_version: "0.1"
+source_id: cdc-nwss-wastewater
+source_url: https://data.cdc.gov/Public-Health-Surveillance/NWSS-Public-SARS-CoV-2-Wastewater-Metric-Data/2ew6-ywp6
+manifest_section: "§1.9"
+
+surveillance_category: wastewater
+pathogens:
+  - sars-cov-2
+
+availability: open
+availability_notes: null
+access_type: socrata
+tier: 3
+
+cadence: weekly
+geography_levels:
+  - facility
+geography_countries:
+  - US
+
+gold_standard_for: []
+vintaged_version_of: null
+succeeds: null
+derived_from: []
+
+value_columns:
+  - name: ptc_15d
+    unit: percent change (15-day)
+    value_type: index
+    description: 15-day percent change in SARS-CoV-2 wastewater concentration vs. baseline. -99 in source coerced to NaN.
+    aggregation: mean
+  - name: detect_prop_15d
+    unit: percent (0-100)
+    value_type: proportion
+    description: Proportion of samples in the 15-day window that detected SARS-CoV-2
+    aggregation: rate
+  - name: percentile
+    unit: percentile (0-100)
+    value_type: index
+    description: Site's current concentration as a percentile of its own history
+    aggregation: mean
+  - name: population_served
+    unit: people
+    value_type: stock
+    description: Population served by the wastewater treatment plant (denominator for catchment scaling)
+    aggregation: mean
+
+notes:
+  extra_columns:
+    - column: location_id_native
+      description: WWTP id from NWSS (un-prefixed). The schema's `location_id` prefixes it with `facility:nwss-`.
+    - column: location_name
+      description: Reporting jurisdiction (state name). Useful for state-level rolls.
+    - column: key_plot_id
+      description: Composite NWSS key (laboratory + jurisdiction + WWTP id + sample location). Carries lab provenance.
+    - column: county_fips
+      description: County FIPS for the WWTP catchment. Useful for joining to county-level series; one site can span multiple counties (semicolon-separated in source).
+  interpretation_caveats:
+    - column: ptc_15d
+      caveat: "Source uses -99 as a sentinel for 'insufficient data'. We coerce to NaN."
+    - column: percentile
+      caveat: "Percentile is *site-relative* — a 90th-percentile reading at a low-concentration site is much lower in absolute terms than at a high-concentration one. Don't compare across sites."
+  general: |
+    Facility-level wastewater is intrinsically point data. We use `location_level: facility`
+    with `location_id` of the form `facility:nwss-<wwtp_id>`. Aggregation to county/state
+    is non-trivial (different sites have different catchments and population denominators)
+    and is left to dashboard-side computation.
+
+extra:
+  source_columns_omitted: 7 (sample_location, sample_location_specify, first_sample_date, sampling_prior, reporting_jurisdiction, county_names, wwtp_jurisdiction — kept the most informative subset)
+  pathogens_in_sibling_files: "Flu A and RSV are in separate Socrata datasets (different ids); each would be its own EPI-Eval source."

@@ -56,6 +56,11 @@ ROW_LEVEL_CONVENTION_COLS = {
     "date", "location_id", "location_level",
     "location_id_native", "location_name", "as_of",
     "condition", "condition_type", "case_status",
+    # `topic` / `topic_type` are the non-illness analog of `condition` /
+    # `condition_type` — used for sources whose row variation is a Wikipedia
+    # article, search query, news category, mobility category, etc., rather
+    # than a pathogen or syndrome. Optional and orthogonal to `condition`.
+    "topic", "topic_type",
 }
 
 GAP_THRESHOLD_DAYS = {
@@ -74,6 +79,28 @@ def load_vocabularies() -> dict:
     return yaml.safe_load(VOCAB_PATH.read_text())
 
 
+def load_location_registries() -> dict[str, set[str]]:
+    """Load all schema/locations/*.yaml registries.
+
+    Returns a dict mapping registry-name → set of recognised codes. The
+    validator treats unknown codes as a warning, not an error — registries
+    are advisory for display-name lookup, not a gate.
+    """
+    out: dict[str, set[str]] = {}
+    locations_dir = SCHEMA_DIR / "locations"
+    if not locations_dir.exists():
+        return out
+    for path in sorted(locations_dir.glob("*.yaml")):
+        data = yaml.safe_load(path.read_text()) or {}
+        codes: set[str] = set()
+        for key in ("codes", "catchment_codes"):
+            if isinstance(data.get(key), dict):
+                codes.update(data[key].keys())
+        if codes:
+            out[path.stem] = codes
+    return out
+
+
 def fuzzy_suggest(value, allowed: list) -> str:
     matches = difflib.get_close_matches(
         str(value).lower(),
@@ -88,6 +115,9 @@ def _check_enum(value, field_name: str, allowed: list, errors: list) -> None:
         errors.append(
             f"{field_name}={value!r} is not in vocabularies.yaml.{fuzzy_suggest(value, allowed)}"
         )
+
+
+VINTAGING_MODES = {"full", "latest", "none"}
 
 
 def validate_card(card: dict, vocab: dict) -> list[str]:
@@ -128,6 +158,14 @@ def validate_card(card: dict, vocab: dict) -> list[str]:
             if field in vc:
                 _check_enum(vc[field], f"value_columns[{name!r}].{field}",
                             vocab[vocab_key], errors)
+
+    vintaging = card.get("vintaging")
+    if vintaging is not None:
+        mode = vintaging.get("mode")
+        if mode not in VINTAGING_MODES:
+            errors.append(
+                f"vintaging.mode={mode!r} must be one of {sorted(VINTAGING_MODES)}"
+            )
 
     return errors
 
@@ -196,6 +234,26 @@ def validate_data(df: pd.DataFrame, card: dict, vocab: dict) -> tuple[list[str],
             f"first few: {sample}"
         )
 
+    # Advisory: cross-check synthetic / sub-state location_ids against the
+    # locations registry. Unknowns surface as warnings — the registry is for
+    # display-name lookup, not a gate. Hard-coded codes (FIPS, ISO) handled
+    # by the regex pattern check above.
+    registries = load_location_registries()
+    if registries:
+        all_known: set[str] = set().union(*registries.values())
+        unknown_synthetic = []
+        for loc_id in df["location_id"].dropna().unique():
+            # Only check synthetic prefixes — bare FIPS / ISO already validated by regex.
+            if "-" in loc_id and any(loc_id.startswith(p) for p in ("US-METRO-", "US-FLUSURV-", "US-HHS-")):
+                if loc_id not in all_known:
+                    unknown_synthetic.append(loc_id)
+        if unknown_synthetic:
+            sample = sorted(set(unknown_synthetic))[:8]
+            warnings.append(
+                f"{len(set(unknown_synthetic))} location_id(s) not in locations registry; "
+                f"add them to upload_pipeline/schema/locations/ if they're real. Sample: {sample}"
+            )
+
     declared = {vc["name"] for vc in card.get("value_columns", []) if "name" in vc}
     documented_extras = {
         ec.get("column")
@@ -248,6 +306,13 @@ def validate_data(df: pd.DataFrame, card: dict, vocab: dict) -> tuple[list[str],
                     f"coerce to NaN if these represent missing data"
                 )
                 break
+
+    vintaging = card.get("vintaging") or {}
+    if vintaging.get("mode") == "full" and "as_of" not in df.columns:
+        errors.append(
+            "vintaging.mode=full but no `as_of` row column present in the data; "
+            "full vintaging requires snapshot dates per row"
+        )
 
     declared_cadence = card.get("cadence")
     if declared_cadence in EXPECTED_CADENCE_DAYS:
