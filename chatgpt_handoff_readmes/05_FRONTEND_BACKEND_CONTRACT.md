@@ -1,6 +1,6 @@
 # Sentinel Atlas Frontend Contract
 
-Last updated: 2026-04-25
+Last updated: 2026-04-26
 
 The backend returns direct FastAPI JSON objects with camelCase aliases accepted on input and snake_case currently emitted by the scaffold. Frontend adapters should map both forms while the API stabilizes.
 
@@ -333,69 +333,604 @@ Built-in model item:
 
 If the optional `statsforecast` package is not installed, the same item is returned with `dependency_status: "missing_optional_dependency"` and explicit AutoETS benchmark requests return `model_unavailable`.
 
-## Forecast Prediction Upload
+## Benchmark Dataset Snapshots
+
+Create a reproducible train/test split before running built-ins or comparing uploaded predictions.
+
+Calls:
+
+```text
+POST /api/forecast-benchmarks/datasets/preview
+POST /api/forecast-benchmarks/datasets
+GET /api/forecast-benchmarks/datasets/{datasetSnapshotId}
+GET /api/forecast-benchmarks/datasets/{datasetSnapshotId}/prediction-template
+```
+
+Request:
+
+```json
+{
+  "country_iso3": "USA",
+  "source_id": "fixture_forecast_source",
+  "metric": "aggregate_signal",
+  "unit": "index",
+  "frequency": "weekly",
+  "horizon_periods": 4,
+  "split_strategy": "last_n_periods"
+}
+```
+
+Preview response:
+
+```json
+{
+  "dataset_snapshot": {
+    "id": null,
+    "country_iso3": "USA",
+    "source_id": "fixture_forecast_source",
+    "metric": "aggregate_signal",
+    "unit": "index",
+    "frequency": "weekly",
+    "horizon_periods": 4,
+    "split_strategy": "last_n_periods",
+    "train_start": "2025-01-05",
+    "train_end": "2025-05-18",
+    "test_start": "2025-05-25",
+    "test_end": "2025-06-15",
+    "target_dates": ["2025-05-25", "2025-06-01", "2025-06-08", "2025-06-15"],
+    "n_train": 20,
+    "n_test": 4,
+    "dataset_hash": "sha256...",
+    "status": "ready",
+    "warnings": [],
+    "limitations": ["Benchmark dataset snapshots do not pad, interpolate, or fabricate missing observation dates."]
+  },
+  "train_preview": [],
+  "target_template": [
+    {
+      "target_date": "2025-05-25",
+      "model_id": null,
+      "model_name": null,
+      "country_iso3": "USA",
+      "source_id": "fixture_forecast_source",
+      "metric": "aggregate_signal",
+      "predicted_value": null,
+      "unit": "index"
+    }
+  ]
+}
+```
+
+The prediction-template endpoint returns JSON by default. Add `?format=csv` for CSV headers and target dates. The template intentionally does not expose holdout observed values.
+
+## Forecast Challenge Snapshots
+
+Forecast challenges freeze a series context for user submissions. They are used for challenge setup, not for public-health alerts.
+
+Calls:
+
+```text
+POST /api/forecast-challenges/preview
+POST /api/forecast-challenges
+GET /api/forecast-challenges?countryIso3=USA&mode=prospective_challenge
+GET /api/forecast-challenges/{challengeId}
+GET /api/countries/{iso3}/forecast-challenges
+GET /api/forecast-challenges/{challengeId}/prediction-template
+POST /api/forecast-challenges/{challengeId}/run-builtins
+POST /api/forecast-challenges/{challengeId}/predictions/upload
+POST /api/forecast-challenges/{challengeId}/score
+GET /api/forecast-challenges/{challengeId}/leaderboard?metric=smape
+GET /api/forecast-challenges/{challengeId}/comparison-points
+GET /api/forecast-challenges/{challengeId}/predictions
+GET /api/prediction-sets?countryIso3=USA&sourceId=fixture_challenge_source&metric=aggregate_signal
+GET /api/prediction-sets/{predictionSetId}
+PATCH /api/prediction-sets/{predictionSetId}/review
+GET /api/prediction-sets/{predictionSetId}/review
+GET /api/submitters
+GET /api/submitters/{submitterId}
+```
+
+Retrospective request:
+
+```json
+{
+  "mode": "retrospective_holdout",
+  "country_iso3": "USA",
+  "source_id": "fixture_challenge_source",
+  "metric": "aggregate_signal",
+  "unit": "index",
+  "frequency": "weekly",
+  "horizon_periods": 4,
+  "split_strategy": "last_n_periods"
+}
+```
+
+Prospective request:
+
+```json
+{
+  "mode": "prospective_challenge",
+  "country_iso3": "USA",
+  "source_id": "fixture_challenge_source",
+  "metric": "aggregate_signal",
+  "unit": "index",
+  "frequency": "weekly",
+  "horizon_periods": 4,
+  "cutoff_at": "2026-04-01T00:00:00Z"
+}
+```
+
+Preview response:
+
+```json
+{
+  "challenge_snapshot": {
+    "id": null,
+    "mode": "prospective_challenge",
+    "country_iso3": "USA",
+    "source_id": "fixture_challenge_source",
+    "signal_category": null,
+    "metric": "aggregate_signal",
+    "unit": "index",
+    "frequency": "weekly",
+    "horizon_periods": 4,
+    "split_strategy": "last_n_periods",
+    "cutoff_at": "2026-04-01T00:00:00Z",
+    "train_start": "2026-01-01",
+    "train_end": "2026-04-01",
+    "target_start": "2026-04-08",
+    "target_end": "2026-04-29",
+    "target_dates": ["2026-04-08", "2026-04-15", "2026-04-22", "2026-04-29"],
+    "n_train": 14,
+    "n_targets": 4,
+    "dataset_hash": "sha256...",
+    "status": "open",
+    "warnings": [
+      {
+        "code": "prospective_truth_unavailable",
+        "message": "Prospective challenge target observations do not exist yet and cannot be scored until aggregate truth arrives.",
+        "severity": "info"
+      }
+    ],
+    "limitations": [
+      "Prediction templates do not include observed truth values."
+    ]
+  },
+  "train_preview": [],
+  "prediction_template": [
+    {
+      "model_id": null,
+      "model_name": null,
+      "target_date": "2026-04-08",
+      "predicted_value": null,
+      "lower": null,
+      "upper": null,
+      "unit": "index",
+      "country_iso3": "USA",
+      "source_id": "fixture_challenge_source",
+      "metric": "aggregate_signal",
+      "signal_category": null,
+      "generated_at": null,
+      "provenance_url": null
+    }
+  ]
+}
+```
+
+Status values:
+
+```text
+draft | open | closed | scoring | pending_truth | partially_scored | scored | insufficient_data
+```
+
+Mode behavior:
+
+- `retrospective_holdout` uses historical observations and freezes holdout observation IDs. Its prediction template omits observed holdout values.
+- `prospective_challenge` uses observations at or before `cutoff_at`, generates future target dates, and has no truth values until later aggregate observations arrive.
+
+The frontend should display warnings and limitations. It should not present challenge templates as public-health alerts, risk scores, Rt/R0 estimates, or operational guidance.
+
+### Built-In Challenge Prediction Sets
+
+Built-in models can be run against a persisted challenge snapshot. The backend stores each successful built-in output as an internal prediction set using the challenge's exact train rows and target dates.
+
+Request:
+
+```json
+{
+  "model_ids": [
+    "naive_last_value",
+    "seasonal_naive",
+    "statsmodels_arima",
+    "statsmodels_sarima",
+    "statsforecast_autoets"
+  ],
+  "overwrite_existing": false
+}
+```
+
+Response:
+
+```json
+{
+  "challenge_id": 1,
+  "prediction_sets": [
+    {
+      "id": 12,
+      "challenge_id": 1,
+      "model_id": "naive_last_value",
+      "model_name": "Naive last value",
+      "prediction_source": "built_in",
+      "submission_track": "internal_baseline",
+      "review_status": "approved",
+      "validation_status": "valid_for_snapshot",
+      "scoring_status": "pending_truth",
+      "country_iso3": "USA",
+      "source_id": "fixture_challenge_source",
+      "signal_category": null,
+      "metric": "aggregate_signal",
+      "unit": "index",
+      "frequency": "weekly",
+      "horizon_periods": 4,
+      "warnings": [
+        {
+          "code": "challenge_prediction_only",
+          "message": "Built-in challenge prediction sets are benchmark-only metric forecasts, not public-health alerts, risk scores, Rt/R0 estimates, validated epidemiological predictions, or operational guidance.",
+          "severity": "warning"
+        }
+      ],
+      "limitations": [
+        "Historical holdout benchmark performance is not proof of future public-health validity."
+      ],
+      "points": [
+        {
+          "id": 101,
+          "prediction_set_id": 12,
+          "target_date": "2026-04-08",
+          "predicted_value": 42.0,
+          "lower": null,
+          "upper": null,
+          "unit": "index",
+          "generated_at": "2026-04-26T15:00:00Z",
+          "provenance_url": null,
+          "created_at": "2026-04-26T15:00:00Z"
+        }
+      ]
+    }
+  ],
+  "results": [
+    {
+      "model_id": "naive_last_value",
+      "status": "complete",
+      "prediction_set_id": 12,
+      "warnings": [],
+      "limitations": []
+    },
+    {
+      "model_id": "statsforecast_autoets",
+      "status": "model_unavailable",
+      "prediction_set_id": null,
+      "warnings": [
+        {
+          "code": "missing_optional_dependency",
+          "message": "Optional dependency statsforecast is not installed.",
+          "severity": "warning"
+        }
+      ],
+      "limitations": []
+    }
+  ]
+}
+```
+
+Status meanings:
+
+```text
+complete | insufficient_data | model_unavailable | failed
+```
+
+Prediction set conventions:
+
+- `prediction_source: "built_in"` and `submission_track: "internal_baseline"` identify backend-owned baselines.
+- `validation_status: "valid_for_snapshot"` means the point dates match the challenge target dates.
+- Prospective challenges return `scoring_status: "pending_truth"` because future observed values do not exist yet.
+- `overwrite_existing: false` reuses an existing built-in prediction set instead of duplicating it.
+- `overwrite_existing: true` replaces the previous built-in set for the same challenge/model.
+- Built-in prediction sets are benchmark-only metric forecasts, not public-health alerts or validated epidemiological predictions.
+
+## Challenge Prediction Upload, Scoring, And Overlays
+
+Challenge-tied uploads compare user prediction CSVs against the exact challenge target dates. They use the same scoring path as built-in prediction sets.
 
 Call:
 
 ```text
-POST /api/forecast-models/predictions/upload
-```
-
-Multipart field:
-
-```text
-file=@forecast-predictions.csv
+POST /api/forecast-challenges/{challengeId}/predictions/upload
 ```
 
 Minimum CSV columns:
 
 ```text
+modelId,modelName,targetDate,predictedValue
+```
+
+Required by CSV columns or challenge/form metadata:
+
+```text
+countryIso3,sourceId,metric
+```
+
+Optional columns or form fields:
+
+```text
+signalCategory,unit,lower,upper,generatedAt,provenanceUrl,limitations,methodSummary,modelUrl,codeUrl,submitterName,submitterEmail,organization,submissionTrack,visibility,disclosureNotes
+```
+
+Submitter email is allowed as submission metadata, but `email` as a prediction data column is rejected. Submitter email is not emitted in public leaderboard rows or submitter list responses. `modelUrl` and `codeUrl` are stored as metadata only; the backend does not fetch or execute them. The backend also rejects executable model artifacts and PII-like, medical-record, or individual trace columns.
+
+Submission tracks:
+
+```text
+internal_baseline | public | verified_group
+```
+
+Review statuses:
+
+```text
+unreviewed | approved | rejected | needs_changes
+```
+
+Public and verified-group uploads require `submitterName`. `verified_group` is hackathon metadata only and should not be presented as cryptographic identity verification.
+
+Upload response:
+
+```json
+{
+  "prediction_set_id": 123,
+  "inserted_count": 4,
+  "rejected_count": 0,
+  "validation_status": "valid_for_snapshot",
+  "scoring_status": "scored",
+  "matched_challenge_id": 1,
+  "warnings": [
+    {
+      "code": "external_training_unverified",
+      "message": "Sentinel Atlas can verify prediction target dates but cannot verify external training data.",
+      "severity": "warning"
+    }
+  ],
+  "errors": []
+}
+```
+
+Validation statuses:
+
+```text
+valid_for_snapshot | overlay_only | stored_unmatched | invalid
+```
+
+Scoring statuses:
+
+```text
+pending_truth | partially_scored | scored | unscored | invalid
+```
+
+Benchmark scoring requires matching country, source, metric, target dates, and unit when both units are present. If units do not match, the prediction set is stored as `overlay_only`; it is shown for visual overlay but has no MAE/RMSE/SMAPE and no rank. Metric mismatches are invalid unless the request explicitly allows overlay-only mode.
+
+Score request:
+
+```text
+POST /api/forecast-challenges/{challengeId}/score
+```
+
+```json
+{
+  "ranking_metric": "smape"
+}
+```
+
+Score response:
+
+```json
+{
+  "challenge_id": 1,
+  "status": "scored",
+  "ranking_metric": "smape",
+  "scores": [
+    {
+      "prediction_set_id": 123,
+      "status": "scored",
+      "mae": 1.2,
+      "rmse": 1.8,
+      "smape": 7.4,
+      "n_scored": 4,
+      "n_expected": 4,
+      "rank_smape": 1,
+      "rank_rmse": 1,
+      "rank_mae": 1,
+      "warnings": [],
+      "limitations": [
+        "Historical holdout benchmark performance is not proof of future public-health validity."
+      ]
+    }
+  ],
+  "warnings": [],
+  "limitations": [
+    "Historical holdout performance is not proof of future public-health validity."
+  ]
+}
+```
+
+Leaderboard call:
+
+```text
+GET /api/forecast-challenges/{challengeId}/leaderboard?metric=smape&submissionTrack=all&reviewStatus=all&includeUnreviewed=true
+```
+
+```json
+{
+  "challenge_id": 1,
+  "ranking_metric": "smape",
+  "leaderboard": [
+    {
+      "rank": 1,
+      "prediction_set_id": 123,
+      "model_id": "team_model_v1",
+      "model_name": "Team Model v1",
+      "prediction_source": "user_uploaded",
+      "submission_track": "public",
+      "review_status": "unreviewed",
+      "submitter_display_name": "Team V1",
+      "organization": "Example Org",
+      "method_summary": "Short model summary supplied by the team.",
+      "model_url": "https://example.test/model",
+      "code_url": "https://example.test/code",
+      "provenance_url": "https://example.test/provenance",
+      "visibility": "public",
+      "status": "scored",
+      "mae": 1.2,
+      "rmse": 1.8,
+      "smape": 7.4,
+      "n_scored": 4,
+      "n_expected": 4,
+      "warnings": [],
+      "limitations": []
+    }
+  ],
+  "warnings": [],
+  "limitations": [
+    "Historical holdout performance is not proof of future public-health validity."
+  ]
+}
+```
+
+Comparison points call:
+
+```text
+GET /api/forecast-challenges/{challengeId}/comparison-points
+```
+
+```json
+[
+  {
+    "target_date": "2026-05-03T00:00:00Z",
+    "observed_value": 100.0,
+    "unit": "copies_ml",
+    "predictions": [
+      {
+        "prediction_set_id": 123,
+        "model_id": "team_model_v1",
+        "model_name": "Team Model v1",
+        "prediction_source": "user_uploaded",
+        "predicted_value": 98.5,
+        "lower": null,
+        "upper": null,
+        "absolute_error": 1.5,
+        "percentage_error": 1.5,
+        "unit": "copies_ml",
+        "validation_status": "valid_for_snapshot",
+        "scoring_status": "scored"
+      }
+    ]
+  }
+]
+```
+
+Leaderboard filters:
+
+```text
+metric=smape|rmse|mae
+submissionTrack=all|internal_baseline|public|verified_group
+reviewStatus=all|approved|unreviewed|rejected|needs_changes
+includeUnreviewed=true|false
+```
+
+Ranking metrics are `smape`, `rmse`, and `mae`; default is `smape`. Only scored or partially scored prediction sets with at least one scored point are ranked. Pending-truth, overlay-only, invalid, unavailable, failed, rejected, and needs-changes rows remain visible when filters allow them but unranked. Built-in baselines remain `internal_baseline` and `approved`.
+
+Review request:
+
+```text
+PATCH /api/prediction-sets/{predictionSetId}/review
+```
+
+```json
+{
+  "review_status": "approved",
+  "reviewer_name": "Hackathon reviewer",
+  "review_notes": "Metadata reviewed for demo."
+}
+```
+
+Review response:
+
+```json
+{
+  "id": 1,
+  "prediction_set_id": 123,
+  "review_status": "approved",
+  "reviewer_name": "Hackathon reviewer",
+  "review_notes": "Metadata reviewed for demo.",
+  "created_at": "2026-04-26T17:00:00Z"
+}
+```
+
+Submitter list item:
+
+```json
+{
+  "id": 1,
+  "display_name": "Team V1",
+  "organization": "Example Org",
+  "affiliation_type": "public",
+  "verification_status": "unverified",
+  "notes": null,
+  "created_at": "2026-04-26T17:00:00Z",
+  "updated_at": null
+}
+```
+
+Submitter responses intentionally omit email addresses.
+
+## Forecast Prediction Upload
+
+Calls:
+
+```text
+POST /api/forecast-models/predictions/upload
+GET /api/forecast-models/predictions?datasetSnapshotId=1
+GET /api/forecast-models/predictions/{predictionSetId}
+DELETE /api/forecast-models/predictions/{predictionSetId}
+```
+
+Standalone CSV minimum columns:
+
+```text
 modelId,modelName,countryIso3,sourceId,metric,targetDate,predictedValue
 ```
 
-Optional columns:
+Snapshot-tied uploads may supply `benchmark_dataset_snapshot_id`, `model_id`, and `model_name` as multipart form fields, with a minimum CSV of:
+
+```text
+targetDate,predictedValue
+```
+
+Optional CSV columns:
 
 ```text
 unit,lower,upper,generatedAt,provenanceUrl,limitations
 ```
 
-Shape:
+Upload response:
 
 ```json
 {
-  "inserted_count": 2,
+  "prediction_set_id": 456,
+  "inserted_count": 4,
   "rejected_count": 0,
-  "models": [
-    {
-      "id": "uploaded_baseline",
-      "name": "Uploaded Baseline",
-      "model_kind": "uploaded_predictions",
-      "status": "uploaded_predictions",
-      "provenance_url": "https://example.test/model",
-      "limitations": ["Test fixture only"],
-      "warnings": [
-        {
-          "code": "benchmark_only",
-          "message": "Forecast benchmark outputs are historical metric evaluations only, not public-health alerts, risk scores, Rt/R0 estimates, or operational guidance.",
-          "severity": "warning"
-        }
-      ]
-    }
-  ],
-  "predictions": [
-    {
-      "model_id": "uploaded_baseline",
-      "country_iso3": "USA",
-      "source_id": "fixture_forecast_source",
-      "metric": "aggregate_signal",
-      "unit": "index",
-      "target_date": "2025-02-16",
-      "predicted_value": 16.0,
-      "lower": 15.0,
-      "upper": 17.0,
-      "provenance_url": "https://example.test/model"
-    }
-  ],
+  "validation_status": "valid_for_snapshot",
+  "matched_dataset_snapshot_id": 123,
+  "models": [],
+  "predictions": [],
   "errors": [],
   "warnings": [
     {
@@ -407,11 +942,31 @@ Shape:
 }
 ```
 
+Prediction set item:
+
+```json
+{
+  "id": 456,
+  "benchmark_dataset_snapshot_id": 123,
+  "model_id": "team_model_v1",
+  "model_name": "Team Model v1",
+  "country_iso3": "USA",
+  "source_id": "fixture_forecast_source",
+  "metric": "aggregate_signal",
+  "unit": "index",
+  "validation_status": "valid_for_snapshot",
+  "row_count": 4,
+  "warnings": [],
+  "limitations": [],
+  "points": []
+}
+```
+
 The backend accepts prediction values only. It rejects executable model artifacts and CSV fields that look like PII, medical records, or operational trace data.
 
 ## Forecast Benchmarks
 
-Call:
+Calls:
 
 ```text
 POST /api/forecast-benchmarks/preview
@@ -420,7 +975,7 @@ GET /api/forecast-benchmarks/{id}
 GET /api/countries/{iso3}/forecast-benchmarks
 ```
 
-Request:
+Backward-compatible request:
 
 ```json
 {
@@ -434,86 +989,74 @@ Request:
 }
 ```
 
+Snapshot request:
+
+```json
+{
+  "dataset_snapshot_id": 123,
+  "model_ids": ["naive_last_value", "statsmodels_arima"],
+  "uploaded_prediction_set_ids": [456]
+}
+```
+
 Response:
 
 ```json
 {
-  "id": 1,
+  "id": null,
+  "dataset_snapshot_id": 123,
   "country_iso3": "USA",
   "source_id": "fixture_forecast_source",
   "metric": "aggregate_signal",
   "unit": "index",
   "frequency": "weekly",
   "horizon_periods": 4,
-  "requested_model_ids": ["naive_last_value"],
+  "requested_model_ids": ["naive_last_value", "team_model_v1"],
+  "uploaded_prediction_set_ids": [456],
   "output_status": "complete",
-  "explanation": "Forecast benchmark completed using stored aggregate observations.",
-  "warnings": [
-    {
-      "code": "benchmark_only",
-      "message": "Forecast benchmark outputs are historical metric evaluations only, not public-health alerts, risk scores, Rt/R0 estimates, or operational guidance.",
-      "severity": "warning"
-    }
-  ],
-  "limitations": ["Benchmarks use stored aggregate observations only."],
-  "comparison": [
+  "explanation": "Historical holdout benchmark completed using a fixed aggregate dataset snapshot.",
+  "leaderboard": [
     {
       "rank": 1,
-      "model_id": "naive_last_value",
-      "display_name": "Naive last value",
+      "model_id": "team_model_v1",
+      "display_name": "Team Model v1",
+      "result_type": "uploaded_prediction_csv",
       "status": "complete",
-      "mae": 1.25,
-      "rmse": 1.5,
-      "smape": 8.1,
-      "n_train": 20,
+      "mae": 1.2,
+      "rmse": 1.8,
+      "smape": 7.4,
+      "n_train": null,
       "n_test": 4,
-      "train_start": "2025-01-05",
-      "train_end": "2025-05-18",
-      "test_start": "2025-05-25",
-      "test_end": "2025-06-15",
       "benchmark_note": "Historical holdout performance is not proof of future public-health validity."
     }
   ],
-  "data_quality_notes": [],
-  "created_at": "2026-04-25T18:00:00Z",
-  "results": [
+  "comparison_points": [
     {
-      "model_id": "naive_last_value",
-      "model_name": "Naive last value",
-      "model_kind": "builtin_baseline",
-      "status": "complete",
-      "mae": 1.25,
-      "rmse": 1.5,
-      "smape": 8.1,
-      "n_train": 20,
-      "n_test": 4,
-      "train_start": "2025-01-05",
-      "train_end": "2025-05-18",
-      "test_start": "2025-05-25",
-      "test_end": "2025-06-15",
-      "warnings": [
+      "target_date": "2025-05-25",
+      "observed_value": 34.5,
+      "unit": "index",
+      "predictions": [
         {
-          "code": "benchmark_only",
-          "message": "Forecast benchmark outputs are historical metric evaluations only, not public-health alerts, risk scores, Rt/R0 estimates, or operational guidance.",
-          "severity": "warning"
-        }
-      ],
-      "limitations": ["Baseline only; useful as a simple benchmark floor."],
-      "data_quality_notes": [],
-      "points": [
-        {
-          "date": "2025-05-25",
-          "observed_value": 34.5,
+          "model_id": "naive_last_value",
+          "display_name": "Naive last value",
+          "result_type": "builtin_model",
           "predicted_value": 32.0,
-          "unit": "index"
+          "lower": null,
+          "upper": null
         }
       ]
     }
-  ]
+  ],
+  "dataset_snapshot": {
+    "id": 123,
+    "target_dates": ["2025-05-25", "2025-06-01", "2025-06-08", "2025-06-15"],
+    "dataset_hash": "sha256..."
+  },
+  "results": []
 }
 ```
 
-Forecast benchmark values are historical metric evaluations over a holdout window. They must not be presented as public-health alerts, risk scores, Rt/R0 estimates, or operational guidance. If no matching stored observations exist, preview returns `output_status: "insufficient_data"` and create returns HTTP 400. Model-specific statuses include `complete`, `insufficient_data`, `model_unavailable`, and `failed`.
+Forecast benchmark values are historical metric evaluations over a holdout window. They must not be presented as public-health alerts, risk scores, Rt/R0 estimates, or operational guidance. If no matching stored observations exist, preview returns `output_status: "insufficient_data"` and create returns HTTP 400. Model-specific statuses include `complete`, `insufficient_data`, `model_unavailable`, `invalid_predictions`, and `failed`.
 
 ## Data-Quality Warnings
 
