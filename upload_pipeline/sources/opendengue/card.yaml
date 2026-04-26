@@ -1,0 +1,87 @@
+# Curated metadata for OpenDengue national-level case counts (V1.3).
+# Static figshare/GitHub archive — re-ingest only when a new release tag drops
+# (current pin: V1.3). The source aggregates dengue case reports from many
+# disparate national surveillance systems; per-country case definitions and
+# temporal resolutions vary, so each row carries those as dimensions.
+
+pretty_name: OpenDengue — national dengue case counts (V1.3)
+license: cc-by-4.0
+size_categories:
+  - 10K<n<100K
+tags:
+  - cadence-irregular
+  - geo-global
+  - surveillance-arboviral
+  - pathogen-dengue
+  - tier-1
+  - availability-open
+
+schema_version: "0.1"
+source_id: opendengue
+source_url: https://opendengue.org/
+manifest_section: "§6.1"
+
+surveillance_category: arboviral
+pathogens:
+  - dengue
+
+availability: open
+availability_notes: "Static archive — V1.3 release on figshare. Updates are sporadic figshare uploads; this dataset pins V1.3 and must be re-ingested manually when a new release drops."
+access_type: github
+tier: 1
+
+cadence: irregular
+geography_levels:
+  - national
+geography_countries:
+  - "multiple"
+
+gold_standard_for: []
+vintaged_version_of: null
+succeeds: null
+derived_from: []
+
+value_columns:
+  - name: dengue_total
+    unit: cases
+    value_type: incident
+    description: Reported dengue cases in the period. May include suspected, probable, and laboratory-confirmed cases — the case definition for each row is in `case_definition`. Includes all severity levels (dengue, dengue with/without warning signs, severe dengue, dengue haemorrhagic fever, dengue shock syndrome, dengue deaths) where reported.
+    aggregation: sum
+
+notes:
+  extra_columns:
+    - column: case_definition
+      description: "Case definition standardized by OpenDengue: `Suspected`, `Probable`, `Confirmed`, `Probable and confirmed`, `Suspected and confirmed`, `Total`. The same (country, date) cell can have multiple rows when the source distinguishes definitions — filter to one for a single time series."
+    - column: temporal_resolution
+      description: "Per-row temporal granularity (`Week` or `Month`) — varies by country and over time. Coarser aggregates (`Year`, `Total`) are filtered out at ingest."
+    - column: location_name
+      description: Source's English country name (uppercase). `location_id` (ISO 3166-1 alpha-2) is canonical.
+  interpretation_caveats:
+    - column: dengue_total
+      caveat: "Cross-country comparability is limited — case definitions, reporting completeness, and surveillance intensity vary substantially. OpenDengue normalizes structure but does not normalize underlying definitions. For modeling, prefer one country at a time or one case_definition consistently."
+    - column: case_definition
+      caveat: "`Probable and confirmed` and `Suspected and confirmed` are *summed* categories from sources that combine tiers — they are not standalone classifications. Don't sum them with `Confirmed`/`Probable`/`Suspected` rows from the same country and date."
+    - column: temporal_resolution
+      caveat: "A country may switch between Week and Month over its history. Pick one resolution per country when constructing a continuous series; don't naively concatenate rows of different temporal_resolution."
+  general: |
+    OpenDengue (Clarke et al. 2024, https://doi.org/10.1038/s41597-024-03120-7) is a
+    standardized archive of dengue case reports from public national surveillance
+    systems. This dataset is the V1.3 **national** extract; subnational extracts
+    (`Spatial_extract`, `Temporal_extract`) are larger and could be ingested as
+    sibling datasets later (`opendengue-admin1`, `opendengue-admin2`).
+
+    Coverage spans 1924-present, but per-country availability varies widely —
+    Brazil has weekly data 2014+, others may be annual aggregates only (filtered
+    out here). Use the `case_definition` and `temporal_resolution` row-level
+    columns to construct a coherent series before modeling.
+
+extra:
+  release_tag: V1.3
+  figshare_doi: https://doi.org/10.6084/m9.figshare.24259573
+  github_repo: https://github.com/OpenDengue/master-repo
+  source_csv: data/releases/V1.3/National_extract_V1_3.zip
+  paper_doi: https://doi.org/10.1038/s41597-024-03120-7
+  filtered_temporal_resolutions:
+    - Year
+    - Total
+  case_definition_normalization: "lowercase 'confirmed' rows in source were merged with 'Confirmed' to deduplicate filter values"

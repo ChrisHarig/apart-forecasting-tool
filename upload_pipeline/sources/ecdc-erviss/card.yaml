@@ -1,0 +1,113 @@
+# Curated metadata for ECDC ERVISS — primary-care ILI/ARI consultation rates
+# slice. Pulled from EU-ECDC/Respiratory_viruses_weekly_data on GitHub. Other
+# ERVISS files (sentinel virological positivity, SARI severity, variants) are
+# scoped as future sibling datasets (`ecdc-erviss-sentinel-virology`, etc.).
+
+pretty_name: ECDC ERVISS — ILI/ARI primary-care consultation rates
+license: other  # ECDC content; verify exact reuse terms before redistribution
+size_categories:
+  - 10K<n<100K
+tags:
+  - cadence-weekly
+  - geo-eu
+  - surveillance-respiratory
+  - pathogen-influenza
+  - tier-1
+  - availability-open
+
+schema_version: "0.1"
+source_id: ecdc-erviss
+source_url: https://github.com/EU-ECDC/Respiratory_viruses_weekly_data
+manifest_section: "§5.3"
+
+surveillance_category: respiratory
+pathogens:
+  - influenza
+  - sars-cov-2
+  - rsv
+
+availability: open
+availability_notes: null
+access_type: github
+tier: 1
+
+cadence: weekly
+geography_levels:
+  - national
+geography_countries:
+  - "AT"
+  - "BE"
+  - "BG"
+  - "CY"
+  - "CZ"
+  - "DE"
+  - "DK"
+  - "EE"
+  - "ES"
+  - "FI"
+  - "FR"
+  - "GR"
+  - "HR"
+  - "HU"
+  - "IE"
+  - "IS"
+  - "IT"
+  - "LI"
+  - "LT"
+  - "LU"
+  - "LV"
+  - "MT"
+  - "NL"
+  - "NO"
+  - "PL"
+  - "PT"
+  - "RO"
+  - "SE"
+  - "SI"
+  - "SK"
+
+gold_standard_for: []
+vintaged_version_of: null
+succeeds: null
+derived_from: []
+
+value_columns:
+  - name: ili_rate
+    unit: consultations per 100,000 population
+    value_type: rate
+    description: Influenza-like illness primary-care consultation rate per 100,000 population per ECDC ERVISS methodology.
+    aggregation: rate
+  - name: ari_rate
+    unit: consultations per 100,000 population
+    value_type: rate
+    description: Acute respiratory infection primary-care consultation rate per 100,000 population. Broader case definition than ILI.
+    aggregation: rate
+
+notes:
+  extra_columns:
+    - column: age
+      description: Reporting age band (`0-4`, `5-14`, `15-64`, `65+`, `total`). Filter to `total` for population-wide series.
+    - column: location_name
+      description: Source's English country name. `location_id` (ISO 3166-1 alpha-2) is canonical.
+  interpretation_caveats:
+    - column: ili_rate
+      caveat: "ILI is a *symptomatic* signal — patients meeting the ECDC ILI case definition (sudden fever ≥38°C plus cough/sore throat) regardless of lab confirmation. Captures non-flu respiratory illness too. Pair with ERVISS sentinel virological positivity for lab-confirmed flu."
+    - column: ari_rate
+      caveat: "ARI is broader than ILI — any acute respiratory infection without requiring fever. Counts will exceed `ili_rate` and include more non-influenza causes."
+    - column: location_id
+      caveat: "Greece is `GR` (ISO 3166-1 alpha-2). ECDC's internal `EL` code is not used in this dataset."
+  general: |
+    ECDC's ERVISS aggregates respiratory virus surveillance from 30+ EU/EEA countries.
+    This dataset is the **primary-care syndromic** slice (ILI and ARI consultation rates);
+    additional ERVISS slices (sentinel virological positivity, SARI severity, variants)
+    can be added as sibling datasets later.
+
+    Data is published weekly to the public GitHub repo at
+    `EU-ECDC/Respiratory_viruses_weekly_data`. Each weekly commit is a snapshot —
+    vintaged history is available via git but is not surfaced as `as_of` in this
+    dataset.
+
+extra:
+  github_repo: https://github.com/EU-ECDC/Respiratory_viruses_weekly_data
+  source_csv: data/ILIARIRates.csv
+  erviss_dashboard: https://erviss.org/

@@ -5,3 +5,4 @@ pyyaml>=6.0
 huggingface_hub>=0.26
 python-dotenv>=1.0
 epiweeks>=2.3
+pycountry>=24.0  # ISO3 → ISO2 crosswalk for opendengue ingest
