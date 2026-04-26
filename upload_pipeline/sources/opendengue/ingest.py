@@ -2,15 +2,16 @@
 
 Pulls the V1.3 National extract from OpenDengue/master-repo on GitHub. The file
 is a long-format archive with one row per (country × calendar period × case
-definition); a single (country, date) cell can have multiple rows when the
-source distinguishes case definitions (Suspected vs Confirmed vs Probable etc.).
+definition × temporal resolution); a single (country, date) cell can have
+multiple rows when the source distinguishes case definitions or reports at
+multiple temporal granularities.
 
 OpenDengue is a static archive. Reproduce by re-running this module against the
 pinned RELEASE_TAG; future versions of OpenDengue will require bumping that tag.
 
 Source: https://opendengue.org/
 GitHub: https://github.com/OpenDengue/master-repo
-Cadence: irregular (some countries report weekly, others monthly)
+Cadence: irregular (mixed Week / Month / Year / Total per country)
 Geography: 129 countries (national)
 History: 1924 onward (per-country availability varies)
 """
@@ -47,9 +48,20 @@ SOURCE_COLUMNS = [
     "T_res",
 ]
 
-# Per-country temporal cadences vary; we keep the row-level temporal_resolution
-# column and drop coarse aggregates (Year, Total) so the dataset is series-shaped.
-KEPT_TEMPORAL_RES = {"Week", "Month"}
+# OpenDengue's case definitions don't all map cleanly onto the schema's
+# four-tier case_status enum (confirmed | probable | suspect | not-classified).
+# We use a relative-equivalence mapping: "Probable and confirmed" gets the
+# looser tier (probable) since that's the minimum certainty represented;
+# "Total" — a source's single combined count without classification — maps
+# to not-classified. The original definition is preserved in `case_definition`.
+CASE_DEFINITION_TO_STATUS: dict[str, str] = {
+    "Confirmed": "confirmed",
+    "Probable": "probable",
+    "Suspected": "suspect",
+    "Probable and confirmed": "probable",
+    "Suspected and confirmed": "suspect",
+    "Total": "not-classified",
+}
 
 
 def fetch_csv() -> pd.DataFrame:
@@ -70,9 +82,6 @@ def iso3_to_iso2(code: str) -> str | None:
 
 def parse_normalize(raw: pd.DataFrame) -> pd.DataFrame:
     df = raw[SOURCE_COLUMNS].copy()
-
-    # Drop coarse temporal aggregates — they don't form a time series.
-    df = df[df["T_res"].isin(KEPT_TEMPORAL_RES)].copy()
 
     # ISO3 → ISO2. OpenDengue uses ISO 3166-1 alpha-3 in ISO_A0; we normalize
     # to alpha-2 to match the EPI-Eval national location_id convention.
@@ -103,6 +112,18 @@ def parse_normalize(raw: pd.DataFrame) -> pd.DataFrame:
     df["case_definition"] = df["case_definition"].str.replace(
         r"^confirmed$", "Confirmed", regex=True
     )
+
+    # Schema-friendly case_status alongside the source's case_definition.
+    df["case_status"] = df["case_definition"].map(CASE_DEFINITION_TO_STATUS)
+    unmapped_defs = sorted(
+        df[df["case_status"].isna()]["case_definition"].dropna().unique().tolist()
+    )
+    if unmapped_defs:
+        raise ValueError(
+            f"case_definition values without a case_status mapping "
+            f"(extend CASE_DEFINITION_TO_STATUS): {unmapped_defs}"
+        )
+
     df["dengue_total"] = pd.to_numeric(df["dengue_total"], errors="coerce")
 
     keep = [
@@ -110,6 +131,7 @@ def parse_normalize(raw: pd.DataFrame) -> pd.DataFrame:
         "location_id",
         "location_level",
         "location_name",
+        "case_status",
         "case_definition",
         "temporal_resolution",
         "dengue_total",
@@ -117,7 +139,7 @@ def parse_normalize(raw: pd.DataFrame) -> pd.DataFrame:
     df = df[keep]
 
     df = df.sort_values(
-        ["date", "location_id", "case_definition", "temporal_resolution"]
+        ["date", "location_id", "case_status", "case_definition", "temporal_resolution"]
     ).reset_index(drop=True)
     return df
 
@@ -131,6 +153,7 @@ def main() -> None:
     print(f"  date range: {df['date'].min().date()} → {df['date'].max().date()}")
     print(f"  countries: {df['location_id'].nunique()}")
     print(f"  case definitions: {sorted(df['case_definition'].unique())}")
+    print(f"  case statuses: {sorted(df['case_status'].unique())}")
     print(f"  temporal resolutions: {sorted(df['temporal_resolution'].unique())}")
     print()
     print("Sample rows (recent BR):")

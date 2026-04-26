@@ -45,24 +45,26 @@ value_columns:
   - name: dengue_total
     unit: cases
     value_type: incident
-    description: Reported dengue cases in the period. May include suspected, probable, and laboratory-confirmed cases — the case definition for each row is in `case_definition`. Includes all severity levels (dengue, dengue with/without warning signs, severe dengue, dengue haemorrhagic fever, dengue shock syndrome, dengue deaths) where reported.
+    description: Reported dengue cases in the period. May include suspected, probable, and laboratory-confirmed cases — see `case_status` (schema-standard) and `case_definition` (source-original) for the certainty tier of each row. Includes all severity levels (dengue, dengue with/without warning signs, severe dengue, dengue haemorrhagic fever, dengue shock syndrome, dengue deaths) where reported.
     aggregation: sum
 
 notes:
   extra_columns:
     - column: case_definition
-      description: "Case definition standardized by OpenDengue: `Suspected`, `Probable`, `Confirmed`, `Probable and confirmed`, `Suspected and confirmed`, `Total`. The same (country, date) cell can have multiple rows when the source distinguishes definitions — filter to one for a single time series."
+      description: "Source-original case definition: `Suspected`, `Probable`, `Confirmed`, `Probable and confirmed`, `Suspected and confirmed`, `Total`. Preserved alongside the schema-standard `case_status` so original fidelity isn't lost. The same (country, date) cell can have multiple rows when the source distinguishes definitions — filter to one for a single time series."
     - column: temporal_resolution
-      description: "Per-row temporal granularity (`Week` or `Month`) — varies by country and over time. Coarser aggregates (`Year`, `Total`) are filtered out at ingest."
+      description: "Per-row temporal granularity (`Week`, `Month`, `Year`, `Total`). Varies by country and over time; some countries only report annually or as a single grand total. Filter to one resolution per country before treating the rows as a continuous time series."
     - column: location_name
       description: Source's English country name (uppercase). `location_id` (ISO 3166-1 alpha-2) is canonical.
   interpretation_caveats:
+    - column: case_status
+      caveat: "Mapping from the source's `case_definition`: `Probable and confirmed` → `probable` (looser tier of the union, the minimum certainty represented); `Suspected and confirmed` → `suspect`; `Total` → `not-classified`. The original definition is preserved in `case_definition` for full fidelity."
     - column: dengue_total
-      caveat: "Cross-country comparability is limited — case definitions, reporting completeness, and surveillance intensity vary substantially. OpenDengue normalizes structure but does not normalize underlying definitions. For modeling, prefer one country at a time or one case_definition consistently."
+      caveat: "Cross-country comparability is limited — case definitions, reporting completeness, and surveillance intensity vary substantially. OpenDengue normalizes structure but does not normalize underlying definitions. For modeling, prefer one country at a time or one case_status consistently."
     - column: case_definition
       caveat: "`Probable and confirmed` and `Suspected and confirmed` are *summed* categories from sources that combine tiers — they are not standalone classifications. Don't sum them with `Confirmed`/`Probable`/`Suspected` rows from the same country and date."
     - column: temporal_resolution
-      caveat: "A country may switch between Week and Month over its history. Pick one resolution per country when constructing a continuous series; don't naively concatenate rows of different temporal_resolution."
+      caveat: "A country may switch between Week, Month, Year, and Total over its history. Pick one resolution per country when constructing a continuous series; don't naively concatenate rows of different temporal_resolution. `Year` rows have calendar_end_date = Dec 31 of that year; `Total` rows have calendar_end_date = the end of the source's reporting period."
   general: |
     OpenDengue (Clarke et al. 2024, https://doi.org/10.1038/s41597-024-03120-7) is a
     standardized archive of dengue case reports from public national surveillance
@@ -71,9 +73,11 @@ notes:
     sibling datasets later (`opendengue-admin1`, `opendengue-admin2`).
 
     Coverage spans 1924-present, but per-country availability varies widely —
-    Brazil has weekly data 2014+, others may be annual aggregates only (filtered
-    out here). Use the `case_definition` and `temporal_resolution` row-level
-    columns to construct a coherent series before modeling.
+    Brazil has weekly data 2014+, others may report only annual aggregates or a
+    single Total row. All four temporal resolutions are preserved so countries
+    that only report annually or with a single grand-total row still appear in
+    the catalog. Use the `case_status` / `case_definition` and
+    `temporal_resolution` row-level columns to construct a coherent series.
 
 extra:
   release_tag: V1.3
@@ -81,7 +85,11 @@ extra:
   github_repo: https://github.com/OpenDengue/master-repo
   source_csv: data/releases/V1.3/National_extract_V1_3.zip
   paper_doi: https://doi.org/10.1038/s41597-024-03120-7
-  filtered_temporal_resolutions:
-    - Year
-    - Total
+  case_definition_to_status_mapping:
+    Confirmed: confirmed
+    Probable: probable
+    Suspected: suspect
+    "Probable and confirmed": probable
+    "Suspected and confirmed": suspect
+    Total: not-classified
   case_definition_normalization: "lowercase 'confirmed' rows in source were merged with 'Confirmed' to deduplicate filter values"
