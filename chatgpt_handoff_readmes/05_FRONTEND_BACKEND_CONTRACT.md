@@ -289,12 +289,239 @@ Shape:
 
 Outputs must include sources used, missing signals, data quality, uncertainty where available, limitations, and plain-language explanation in the run snapshots.
 
+## Forecast Model Catalog
+
+Call:
+
+```text
+GET /api/forecast-models
+GET /api/forecast-models/{modelId}
+```
+
+Built-in model item:
+
+```json
+{
+  "id": "statsforecast_autoets",
+  "name": "StatsForecast AutoETS",
+  "model_id": "statsforecast_autoets",
+  "display_name": "StatsForecast AutoETS",
+  "model_kind": "builtin_statsforecast",
+  "model_family": "exponential_smoothing_ets",
+  "implementation_source": "statsforecast",
+  "benchmark_only": true,
+  "builtin": true,
+  "accepts_uploaded_code": false,
+  "accepts_prediction_csv": false,
+  "required_observation_count": 8,
+  "supported_frequencies": ["daily", "weekly", "monthly"],
+  "supports_prediction_intervals": "unknown",
+  "dependency_status": "available",
+  "description": "AutoETS benchmark fitted with the open-source Nixtla StatsForecast package.",
+  "owner": "Sentinel Atlas",
+  "status": "builtin",
+  "limitations": ["Statistical time-series benchmark only; not an epidemiological model, public-health alert, or validated pandemic prediction."],
+  "warnings": [
+    {
+      "code": "benchmark_only",
+      "message": "Forecast benchmark outputs are historical metric evaluations only, not public-health alerts, risk scores, Rt/R0 estimates, or operational guidance.",
+      "severity": "warning"
+    }
+  ]
+}
+```
+
+If the optional `statsforecast` package is not installed, the same item is returned with `dependency_status: "missing_optional_dependency"` and explicit AutoETS benchmark requests return `model_unavailable`.
+
+## Forecast Prediction Upload
+
+Call:
+
+```text
+POST /api/forecast-models/predictions/upload
+```
+
+Multipart field:
+
+```text
+file=@forecast-predictions.csv
+```
+
+Minimum CSV columns:
+
+```text
+modelId,modelName,countryIso3,sourceId,metric,targetDate,predictedValue
+```
+
+Optional columns:
+
+```text
+unit,lower,upper,generatedAt,provenanceUrl,limitations
+```
+
+Shape:
+
+```json
+{
+  "inserted_count": 2,
+  "rejected_count": 0,
+  "models": [
+    {
+      "id": "uploaded_baseline",
+      "name": "Uploaded Baseline",
+      "model_kind": "uploaded_predictions",
+      "status": "uploaded_predictions",
+      "provenance_url": "https://example.test/model",
+      "limitations": ["Test fixture only"],
+      "warnings": [
+        {
+          "code": "benchmark_only",
+          "message": "Forecast benchmark outputs are historical metric evaluations only, not public-health alerts, risk scores, Rt/R0 estimates, or operational guidance.",
+          "severity": "warning"
+        }
+      ]
+    }
+  ],
+  "predictions": [
+    {
+      "model_id": "uploaded_baseline",
+      "country_iso3": "USA",
+      "source_id": "fixture_forecast_source",
+      "metric": "aggregate_signal",
+      "unit": "index",
+      "target_date": "2025-02-16",
+      "predicted_value": 16.0,
+      "lower": 15.0,
+      "upper": 17.0,
+      "provenance_url": "https://example.test/model"
+    }
+  ],
+  "errors": [],
+  "warnings": [
+    {
+      "code": "benchmark_only",
+      "message": "Forecast benchmark outputs are historical metric evaluations only, not public-health alerts, risk scores, Rt/R0 estimates, or operational guidance.",
+      "severity": "warning"
+    }
+  ]
+}
+```
+
+The backend accepts prediction values only. It rejects executable model artifacts and CSV fields that look like PII, medical records, or operational trace data.
+
+## Forecast Benchmarks
+
+Call:
+
+```text
+POST /api/forecast-benchmarks/preview
+POST /api/forecast-benchmarks
+GET /api/forecast-benchmarks/{id}
+GET /api/countries/{iso3}/forecast-benchmarks
+```
+
+Request:
+
+```json
+{
+  "country_iso3": "USA",
+  "source_id": "fixture_forecast_source",
+  "metric": "aggregate_signal",
+  "unit": "index",
+  "frequency": "weekly",
+  "horizon_periods": 4,
+  "model_ids": ["naive_last_value", "seasonal_naive", "statsforecast_autoets"]
+}
+```
+
+Response:
+
+```json
+{
+  "id": 1,
+  "country_iso3": "USA",
+  "source_id": "fixture_forecast_source",
+  "metric": "aggregate_signal",
+  "unit": "index",
+  "frequency": "weekly",
+  "horizon_periods": 4,
+  "requested_model_ids": ["naive_last_value"],
+  "output_status": "complete",
+  "explanation": "Forecast benchmark completed using stored aggregate observations.",
+  "warnings": [
+    {
+      "code": "benchmark_only",
+      "message": "Forecast benchmark outputs are historical metric evaluations only, not public-health alerts, risk scores, Rt/R0 estimates, or operational guidance.",
+      "severity": "warning"
+    }
+  ],
+  "limitations": ["Benchmarks use stored aggregate observations only."],
+  "comparison": [
+    {
+      "rank": 1,
+      "model_id": "naive_last_value",
+      "display_name": "Naive last value",
+      "status": "complete",
+      "mae": 1.25,
+      "rmse": 1.5,
+      "smape": 8.1,
+      "n_train": 20,
+      "n_test": 4,
+      "train_start": "2025-01-05",
+      "train_end": "2025-05-18",
+      "test_start": "2025-05-25",
+      "test_end": "2025-06-15",
+      "benchmark_note": "Historical holdout performance is not proof of future public-health validity."
+    }
+  ],
+  "data_quality_notes": [],
+  "created_at": "2026-04-25T18:00:00Z",
+  "results": [
+    {
+      "model_id": "naive_last_value",
+      "model_name": "Naive last value",
+      "model_kind": "builtin_baseline",
+      "status": "complete",
+      "mae": 1.25,
+      "rmse": 1.5,
+      "smape": 8.1,
+      "n_train": 20,
+      "n_test": 4,
+      "train_start": "2025-01-05",
+      "train_end": "2025-05-18",
+      "test_start": "2025-05-25",
+      "test_end": "2025-06-15",
+      "warnings": [
+        {
+          "code": "benchmark_only",
+          "message": "Forecast benchmark outputs are historical metric evaluations only, not public-health alerts, risk scores, Rt/R0 estimates, or operational guidance.",
+          "severity": "warning"
+        }
+      ],
+      "limitations": ["Baseline only; useful as a simple benchmark floor."],
+      "data_quality_notes": [],
+      "points": [
+        {
+          "date": "2025-05-25",
+          "observed_value": 34.5,
+          "predicted_value": 32.0,
+          "unit": "index"
+        }
+      ]
+    }
+  ]
+}
+```
+
+Forecast benchmark values are historical metric evaluations over a holdout window. They must not be presented as public-health alerts, risk scores, Rt/R0 estimates, or operational guidance. If no matching stored observations exist, preview returns `output_status: "insufficient_data"` and create returns HTTP 400. Model-specific statuses include `complete`, `insufficient_data`, `model_unavailable`, and `failed`.
+
 ## Data-Quality Warnings
 
 The frontend should display:
 
 - low `quality_score`,
 - empty time-series availability `options`,
+- forecast benchmark `insufficient_data`, `partial`, `model_unavailable`, or `failed` statuses,
 - stale `latest_observation_at`,
 - `missing_features`,
 - source `limitations`,

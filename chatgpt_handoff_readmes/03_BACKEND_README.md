@@ -12,6 +12,7 @@ This backend is not a pathogen engineering, wet-lab, gain-of-function, evasion, 
 - Alembic scaffold for future migrations.
 - Connector registry with metadata-only placeholders for public-health, wastewater, aviation, maritime, forecast, news, and user-upload sources.
 - Normalization service for aggregate time-series CSV uploads.
+- Forecast benchmark POC for stored aggregate time-series with naive, seasonal naive, ARIMA, SARIMA, optional StatsForecast AutoETS, and uploaded prediction CSV baselines.
 - Feature availability, data quality, and model eligibility services that expose missingness instead of hiding it.
 - Placeholder model-run behavior that produces only limited summaries when uploaded/test data supports them, otherwise `insufficient_data`.
 
@@ -74,6 +75,16 @@ Models:
 - `GET /api/model-runs/{id}`
 - `GET /api/countries/{iso3}/model-readiness`
 - `POST /api/model-runs/preview`
+
+Forecast benchmarks:
+
+- `GET /api/forecast-models`
+- `GET /api/forecast-models/{modelId}`
+- `POST /api/forecast-models/predictions/upload`
+- `POST /api/forecast-benchmarks/preview`
+- `POST /api/forecast-benchmarks`
+- `GET /api/forecast-benchmarks/{id}`
+- `GET /api/countries/{iso3}/forecast-benchmarks`
 
 ## Local Setup
 
@@ -155,6 +166,61 @@ The response is emitted in snake_case and is built only from stored normalized o
 
 An empty `options` array means the frontend should show an empty state and must not fabricate chart data.
 
+## Forecast Benchmarking
+
+Forecast benchmarks are historical evaluations of stored aggregate metric values. They are not public-health alerts, risk scores, Rt/R0 estimates, or operational guidance.
+
+Built-in benchmark models:
+
+- `naive_last_value`
+- `seasonal_naive`
+- `statsmodels_arima`
+- `statsmodels_sarima`
+- `statsforecast_autoets`
+
+`statsforecast_autoets` is the approved whitelisted open-source model for this stage. It uses Nixtla StatsForecast AutoETS as a statistical ETS benchmark only. It is not an epidemiological model, public-health alert, Rt/R0 estimate, risk score, or validated pandemic prediction.
+
+Install the optional AutoETS dependency:
+
+```bash
+cd backend
+pip install -e ".[dev,forecast]"
+```
+
+If `statsforecast` is not installed, `/api/forecast-models/statsforecast_autoets` still appears with `dependency_status: "missing_optional_dependency"`, and explicit benchmark requests return a structured `model_unavailable` result.
+
+Preview a benchmark without saving it:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/forecast-benchmarks/preview ^
+  -H "Content-Type: application/json" ^
+  -d "{\"countryIso3\":\"USA\",\"sourceId\":\"fixture_forecast_source\",\"metric\":\"aggregate_signal\",\"frequency\":\"weekly\",\"horizonPeriods\":4}"
+```
+
+Preview AutoETS explicitly:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/forecast-benchmarks/preview ^
+  -H "Content-Type: application/json" ^
+  -d "{\"countryIso3\":\"USA\",\"sourceId\":\"fixture_forecast_source\",\"metric\":\"aggregate_signal\",\"frequency\":\"weekly\",\"horizonPeriods\":4,\"modelIds\":[\"statsforecast_autoets\"]}"
+```
+
+Uploaded model support accepts prediction CSVs only. It does not accept executable code, pickle/joblib artifacts, notebooks, containers, or model binaries.
+
+Minimum forecast prediction CSV columns:
+
+```text
+modelId,modelName,countryIso3,sourceId,metric,targetDate,predictedValue
+```
+
+Useful optional columns:
+
+```text
+unit,lower,upper,generatedAt,provenanceUrl,limitations
+```
+
+The benchmark service uses only stored normalized observations, creates a holdout from the last `horizonPeriods`, and reports `mae`, `rmse`, `smape`, `n_train`, `n_test`, train/test windows, warnings, limitations, leaderboard comparison rows, and per-date observed/predicted values. If a series is missing or too short, the affected model returns `insufficient_data`; if an optional dependency is absent, the affected model returns `model_unavailable`.
+
 ## Frontend Integration
 
 The frontend should:
@@ -163,6 +229,8 @@ The frontend should:
 - call `/api/countries/{iso3}/sources` for country-specific source availability,
 - call `/api/countries/{iso3}/timeseries/available` to list chartable source/metric/unit/date ranges,
 - call `/api/timeseries` for uploaded/ingested aggregate records,
+- call `/api/forecast-benchmarks/preview` before showing benchmark results,
+- call `/api/forecast-models/predictions/upload` only for prediction CSVs, never executable artifacts,
 - call `/api/countries/{iso3}/features` to enable/disable views,
 - call `/api/countries/{iso3}/model-readiness` before offering model-run actions,
 - display `warnings`, `limitations`, `missing_features`, provenance URLs, and source IDs.
@@ -182,6 +250,8 @@ Implemented registry entries:
 
 No complex epidemiological model is implemented. The model-run endpoint stores an honest eligibility snapshot and produces numeric points only for narrow supported placeholder summaries, such as relative change over uploaded wastewater observations.
 
+Forecast benchmark endpoints are separate from `/api/model-runs`. They compare baseline or uploaded prediction values against historical holdout observations and must be displayed as benchmark-only metric forecasts. Historical holdout performance is not proof of future public-health validity.
+
 ## Unimplemented
 
 - Live ingestion from public APIs.
@@ -190,6 +260,7 @@ No complex epidemiological model is implemented. The model-run endpoint stores a
 - Auth, rate limiting, and deployment hardening.
 - Full source coverage backfill by country.
 - Forecast hub normalization.
+- Production-grade model registry security and authentication.
 - News scraper implementation.
 - Advanced epidemiological simulations.
 

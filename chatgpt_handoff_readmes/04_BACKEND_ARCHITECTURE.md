@@ -12,6 +12,7 @@ Sentinel Atlas is organized around uneven country data availability. The backend
 - Uploaded aggregate data is normalized into a canonical observation table.
 - Readiness services compute transparent heuristic scores.
 - Model eligibility selects only supported models and returns `insufficient_data` by default.
+- Forecast benchmark services compare built-in baselines, optional whitelisted StatsForecast AutoETS, or uploaded prediction CSVs against stored aggregate holdout observations; they do not execute uploaded model code.
 
 ## Upgrade Path
 
@@ -21,8 +22,9 @@ Sentinel Atlas is organized around uneven country data availability. The backend
 4. Add TimescaleDB hypertables for `observations` and `model_output_points` if supported.
 5. Implement live adapters one at a time, each with source terms, rate limits, and provenance.
 6. Promote data quality scoring rules into versioned policies.
+7. Add authenticated model/prediction ownership, benchmark access controls, and stricter production model registry governance.
+8. Decide whether optional `statsforecast` should remain an extra or become part of the production backend image.
 
 ## Safety Boundary
 
-The backend supports aggregate public-health readiness analysis only. It must reject individual identifiers, medical records, personal traces, and any request to generate pathogen engineering, wet-lab, evasion, dissemination, or operational outbreak-action guidance.
-
+The backend supports aggregate public-health readiness analysis only. It must reject individual identifiers, medical records, personal traces, executable model uploads, and any request to generate pathogen engineering, wet-lab, evasion, dissemination, or operational outbreak-action guidance.

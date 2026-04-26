@@ -420,6 +420,21 @@ GET /api/timeseries/available?countryIso3=USA
 
 If the availability response has an empty `options` array, show an empty state. Do not invent chart rows.
 
+Backend forecast benchmark endpoints for stored aggregate rows:
+
+```text
+GET  /api/forecast-models
+POST /api/forecast-models/predictions/upload
+POST /api/forecast-benchmarks/preview
+POST /api/forecast-benchmarks
+GET  /api/forecast-benchmarks/:id
+GET  /api/countries/:iso3/forecast-benchmarks
+```
+
+Forecast benchmark results are historical metric evaluations only. Do not present them as public-health alerts, risk scores, Rt/R0 estimates, or operational guidance. Uploaded model support accepts prediction CSVs only, never executable artifacts.
+
+The approved whitelisted open-source benchmark model is `statsforecast_autoets` (`StatsForecast AutoETS`). It is optional and should show `model_unavailable` when the backend is not installed with `pip install -e ".[dev,forecast]"`.
+
 Date range presets:
 
 - `14d`
@@ -474,6 +489,8 @@ The backend should eventually provide:
 - Source adapter jobs for public datasets.
 - News/event surveillance endpoint.
 - Provenance and data-quality metadata.
+- Forecast benchmark storage for baseline and uploaded prediction comparisons.
+- Optional StatsForecast AutoETS benchmark support with no uploaded executable model code.
 
 Recommended endpoint shapes:
 
@@ -485,6 +502,12 @@ POST   /api/timeseries/upload
 GET    /api/countries/:iso3/timeseries/available
 GET    /api/timeseries/available?countryIso3=USA
 GET    /api/timeseries?countryIso3=&sourceId=&metric=&startDate=&endDate=
+GET    /api/forecast-models
+POST   /api/forecast-models/predictions/upload
+POST   /api/forecast-benchmarks/preview
+POST   /api/forecast-benchmarks
+GET    /api/forecast-benchmarks/:id
+GET    /api/countries/:iso3/forecast-benchmarks
 GET    /api/countries/:iso3/news/latest
 ```
 
