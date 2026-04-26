@@ -1,0 +1,93 @@
+pretty_name: WHO Global TB — annual country estimates
+license: cc-by-4.0
+size_categories:
+  - 1K<n<10K
+tags:
+  - cadence-annual
+  - geo-global
+  - surveillance-notifiable
+  - pathogen-tuberculosis
+  - tier-3
+  - availability-open
+
+schema_version: "0.1"
+source_id: who-tb-burden
+source_url: https://www.who.int/teams/global-programme-on-tuberculosis-and-lung-health/data
+manifest_section: "§12.1"
+
+surveillance_category: notifiable
+pathogens:
+  - tuberculosis
+
+availability: open
+availability_notes: null
+access_type: csv
+tier: 3
+
+cadence: annual
+geography_levels:
+  - national
+geography_countries:
+  - multiple
+
+gold_standard_for: []
+vintaged_version_of: null
+succeeds: null
+derived_from: []
+
+value_columns:
+  - name: e_pop_num
+    unit: people
+    value_type: stock
+    description: WHO-estimated population for the year
+    aggregation: mean
+  - name: e_inc_100k
+    unit: per 100k population
+    value_type: rate
+    description: Estimated TB incidence rate per 100k (all forms)
+    aggregation: rate
+  - name: e_inc_num
+    unit: cases
+    value_type: incident
+    description: Estimated absolute TB incidence (all forms)
+    aggregation: sum
+  - name: e_mort_100k
+    unit: per 100k population
+    value_type: rate
+    description: Estimated TB mortality rate per 100k (all forms, including HIV+TB)
+    aggregation: rate
+  - name: e_mort_num
+    unit: deaths
+    value_type: incident
+    description: Estimated absolute TB deaths (all forms, including HIV+TB)
+    aggregation: sum
+  - name: e_tbhiv_prct
+    unit: percent (0-100)
+    value_type: proportion
+    description: Estimated % of TB cases that are HIV-positive
+    aggregation: rate
+  - name: c_cdr
+    unit: percent (0-100)
+    value_type: proportion
+    description: Case detection rate (notifications / estimated incidence)
+    aggregation: rate
+
+notes:
+  extra_columns:
+    - column: location_name
+      description: WHO English country name. `location_id` is ISO2.
+  interpretation_caveats:
+    - column: e_inc_num
+      caveat: |
+        WHO modelled estimate, not direct surveillance count. Re-estimated each year — historical
+        values can change between releases. For a notification-only series use the sibling
+        `notifications` dataset (separate ingest TBD).
+  general: |
+    The TB burden file is annual modelled estimates with uncertainty intervals (we drop the
+    `_lo` / `_hi` companion columns for v0.1; recoverable from the source as needed). Best
+    used as a slow covariate (population denominators, multi-year context) rather than as
+    a forecasting target.
+
+extra:
+  source_columns_omitted: ~50 columns dropped (mostly _lo/_hi uncertainty bands and per-form / per-age breakdowns)
+  estimates_vintaging_note: "WHO re-estimates each year using the latest model; older releases differ. We currently take the latest CSV as-of."

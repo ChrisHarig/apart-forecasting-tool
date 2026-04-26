@@ -1,0 +1,64 @@
+pretty_name: RSV Forecast Hub — RSV hospital admissions target
+license: cc0-1.0
+size_categories:
+  - 10K<n<100K
+tags:
+  - cadence-weekly
+  - geo-us
+  - surveillance-respiratory
+  - pathogen-rsv
+  - tier-2
+  - availability-open
+
+schema_version: "0.1"
+source_id: rsv-forecast-hub
+source_url: https://github.com/CDCgov/rsv-forecast-hub
+manifest_section: "§4.3"
+
+surveillance_category: respiratory
+pathogens:
+  - rsv
+
+availability: open
+availability_notes: null
+access_type: github
+tier: 2
+
+cadence: weekly
+geography_levels:
+  - national
+  - subnational-state
+geography_countries:
+  - US
+
+gold_standard_for: []
+vintaged_version_of: null
+succeeds: null
+derived_from:
+  - nhsn-hrd
+
+vintaging:
+  mode: full
+  granularity: weekly
+
+value_columns:
+  - name: value
+    unit: admissions/week
+    value_type: incident
+    description: Confirmed RSV hospital admissions for the epiweek (hub scoring target)
+    aggregation: sum
+
+notes:
+  extra_columns:
+    - column: target
+      description: "Hubverse target identifier (e.g. 'wk inc rsv hosp'). Mostly a single constant value, kept for traceability."
+    - column: location_name
+      description: Location name as published; `location_id` is canonical.
+  interpretation_caveats:
+    - column: value
+      caveat: "RSV mandatory reporting started 2024-W46; pre-2024-W46 values may be NaN or sparsely populated."
+  general: |
+    Truth-only ingest, parquet source.
+
+extra:
+  hub_format_note: "Hubverse"

@@ -1,0 +1,78 @@
+pretty_name: Wikipedia pageviews — disease-article daily views
+license: cc-by-sa-4.0
+size_categories:
+  - 10K<n<100K
+tags:
+  - cadence-daily
+  - geo-global
+  - surveillance-search
+  - tier-3
+  - availability-open
+
+schema_version: "0.1"
+source_id: wikipedia-pageviews
+source_url: https://wikimedia.org/api/rest_v1/
+manifest_section: "§15.2"
+
+surveillance_category: search
+pathogens:
+  - influenza
+  - sars-cov-2
+  - rsv
+  - mpox
+  - measles
+  - dengue
+  - tuberculosis
+  - ebola
+  - pertussis
+
+availability: open
+availability_notes: null
+access_type: api
+tier: 3
+
+cadence: daily
+geography_levels:
+  - global
+geography_countries:
+  - multiple
+
+gold_standard_for: []
+vintaged_version_of: null
+succeeds: null
+derived_from: []
+
+value_columns:
+  - name: views
+    unit: pageviews/day
+    value_type: incident
+    description: Daily English-Wikipedia pageviews for the article (all access types, all agents)
+    aggregation: sum
+
+notes:
+  interpretation_caveats:
+    - column: views
+      caveat: |
+        News-driven spikes drown out steady-state interest. The signal correlates with
+        outbreak attention but lags / leads true case curves unpredictably. Useful as a
+        covariate, not a target.
+  general: |
+    Per-article time series. We hand-pick a small basket of articles correlated with
+    respiratory + outbreak surveillance topics; extending the article list is a single
+    line in the ingest module. Row-level `topic` carries the article name, `topic_type`
+    is `article` — see schema v0.1 "Topic-segmented sources".
+
+extra:
+  curated_topics:
+    - Influenza
+    - COVID-19
+    - Respiratory_syncytial_virus
+    - Common_cold
+    - Pneumonia
+    - Mpox
+    - Measles
+    - Norovirus
+    - Dengue_fever
+    - Whooping_cough
+    - Ebola_virus_disease
+    - Tuberculosis

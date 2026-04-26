@@ -27,6 +27,10 @@ pathogens:
   - rsv
   - mers-cov
   - hmpv
+  - adenovirus
+  - parainfluenza
+  - rhinovirus-enterovirus     # the two are reported together by most labs
+  - seasonal-coronavirus       # OC43 / NL63 / HKU1 / 229E pooled
 
   # Filoviruses / hemorrhagic
   - ebola
@@ -118,6 +122,26 @@ condition_type:
   - outcome                   # clinical outcome (sepsis, SIDS, etc.)
 
 # ─────────────────────────────────────────────────────────────────────────
+# Topic type — the non-illness analog of `condition_type`. Used for sources
+# whose row variation is a Wikipedia article, search query, news category,
+# mobility category, etc. — not a pathogen or syndrome.
+#
+# `topic` (free-form slug) + `topic_type` (one of these) are the row-level
+# pair, parallel to `condition` + `condition_type`. A row may carry either
+# pair, both, or neither. Using both at once is fine for sources that report
+# topic-segmented signals about a specific condition (e.g. news articles
+# tagged with both 'vaccination' (topic) and 'sars-cov-2' (condition)).
+# ─────────────────────────────────────────────────────────────────────────
+topic_type:
+  - article                   # Wikipedia / Wikidata articles, news article subjects
+  - search_query              # Google Trends, search-engine queries
+  - mobility_category         # Apple/Google mobility categories (retail, transit, ...)
+  - news_category             # News-source categories (outbreak alert, policy, vaccine, ...)
+  - product_category          # OTC sales / pharmacy categories (cough medicine, etc.)
+  - intent                    # general expressed intent / sentiment buckets
+  - other                     # use sparingly; explain in description
+
+# ─────────────────────────────────────────────────────────────────────────
 # Case status — case-classification certainty tier. Used at the row level
 # in case-register sources (NNDSS uses confirmed/probable/suspect).
 # Orthogonal to vintaging: a row's `case_status` is *certainty of label*,
@@ -142,7 +166,8 @@ surveillance_category:
   - syndromic            # ED visits / chief complaints not specific to a category
   - mortality            # death certificates, P&I mortality
   - mobility             # movement / transportation data
-  - search               # search trends, page views, NLP-derived signals
+  - search               # search trends, page views, NLP-derived intent / interest signals
+  - news                 # editorial / event-reporting feeds (ProMED, HealthMap, outbreak news streams)
   - genomic              # sequences, phylogenetics, lineage surveillance
   - environmental        # mosquito/tick traps, climate covariates
   - behavioral           # self-report symptoms, surveys

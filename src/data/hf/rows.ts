@@ -19,7 +19,13 @@ export interface RecentRowsResult {
 }
 
 const PAGE_SIZE = 100;
-const MAX_ROWS = 5000;
+// Bumped from 5,000 → 10,000 so medium-sized datasets (delphi-flusurv at 9.3k,
+// canada-fluwatch at 2.7k, ukhsa-respiratory at 1.3k) come down complete.
+// Larger datasets (nyt-covid 2.5M, jhu-csse-covid 225k, …) still get truncated
+// to the first 10k rows in chronological order — known-biased toward early
+// data, follow-up TODO is stratified sampling. The truncation indicator in
+// the UI tells the user when this is happening.
+const MAX_ROWS = 10_000;
 const LATEST_TAIL = 100;
 const DEFAULT_RECENT_N = 4;
 

@@ -1,0 +1,76 @@
+pretty_name: OWID Mpox — global daily compiled
+license: cc-by-4.0
+size_categories:
+  - 10K<n<100K
+tags:
+  - cadence-daily
+  - geo-global
+  - surveillance-notifiable
+  - pathogen-mpox
+  - tier-3
+  - availability-open
+
+schema_version: "0.1"
+source_id: owid-mpox
+source_url: https://github.com/owid/monkeypox
+manifest_section: "§9.2"
+
+surveillance_category: notifiable
+pathogens:
+  - mpox
+
+availability: open
+availability_notes: null
+access_type: github
+tier: 3
+
+cadence: daily
+geography_levels:
+  - global
+  - national
+geography_countries:
+  - multiple
+
+gold_standard_for: []
+vintaged_version_of: null
+succeeds: null
+derived_from: []
+
+value_columns:
+  - name: new_cases
+    unit: cases/day
+    value_type: incident
+    description: New confirmed mpox cases per day per country (OWID compilation)
+    aggregation: sum
+  - name: new_deaths
+    unit: deaths/day
+    value_type: incident
+    description: New confirmed mpox deaths per day
+    aggregation: sum
+  - name: total_cases
+    unit: cases (cumulative)
+    value_type: cumulative
+    description: Cumulative confirmed mpox cases since 2022 outbreak start
+    aggregation: max
+  - name: total_deaths
+    unit: deaths (cumulative)
+    value_type: cumulative
+    description: Cumulative confirmed mpox deaths
+    aggregation: max
+
+notes:
+  extra_columns:
+    - column: location_name
+      description: OWID's English country / aggregate name. `location_id` is canonical.
+  interpretation_caveats:
+    - column: new_cases
+      caveat: |
+        Many countries publish weekly bulletins; OWID assigns each report to a single
+        day, so day-of-week effects are artefactual. Smooth before any analytical use.
+  general: |
+    Compiled by OWID from WHO situation reports + national bulletins. 2022 outbreak
+    onwards. Per-million columns are dropped — recoverable from kept absolute counts +
+    a population join.
+
+extra:
+  source_columns_omitted: 6 per-million / smoothed columns dropped

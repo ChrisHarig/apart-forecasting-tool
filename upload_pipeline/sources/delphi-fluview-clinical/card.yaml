@@ -1,0 +1,91 @@
+pretty_name: CDC FluView Clinical — weekly flu virology by clinical labs
+license: other
+size_categories:
+  - 10K<n<100K
+tags:
+  - cadence-weekly
+  - geo-us
+  - surveillance-respiratory
+  - pathogen-influenza
+  - tier-2
+  - availability-open
+
+schema_version: "0.1"
+source_id: delphi-fluview-clinical
+source_url: https://gis.cdc.gov/grasp/fluview/fluportaldashboard.html
+manifest_section: "§1.6 (clinical labs subset)"
+
+surveillance_category: respiratory
+pathogens:
+  - influenza
+  - influenza-a
+  - influenza-b
+
+availability: open
+availability_notes: null
+access_type: delphi
+tier: 2
+
+cadence: weekly
+geography_levels:
+  - national
+  - subnational-region
+  - subnational-state
+geography_countries:
+  - US
+
+gold_standard_for: []
+vintaged_version_of: null
+succeeds: null
+derived_from: []
+
+value_columns:
+  - name: total_specimens
+    unit: specimens/week
+    value_type: incident
+    description: Total flu specimens tested by participating clinical labs this week
+    aggregation: sum
+  - name: total_a
+    unit: positives/week
+    value_type: incident
+    description: Specimens positive for influenza A
+    aggregation: sum
+  - name: total_b
+    unit: positives/week
+    value_type: incident
+    description: Specimens positive for influenza B
+    aggregation: sum
+  - name: percent_positive
+    unit: percent (0-100)
+    value_type: proportion
+    description: Share of specimens positive for any flu (the lead virology indicator)
+    aggregation: rate
+  - name: percent_a
+    unit: percent (0-100)
+    value_type: proportion
+    description: Share of specimens positive for influenza A
+    aggregation: rate
+  - name: percent_b
+    unit: percent (0-100)
+    value_type: proportion
+    description: Share of specimens positive for influenza B
+    aggregation: rate
+
+notes:
+  extra_columns:
+    - column: location_name
+      description: Source-native region code. `location_id` is canonical.
+  interpretation_caveats:
+    - column: percent_positive
+      caveat: |
+        Clinical-lab specimens are *symptomatic-test* numerator/denominator. % positive moves with both
+        true flu prevalence and care-seeking patterns. Pair with ILINet's wILI for the standard
+        "ILI × % positive" combination → estimated true flu prevalence.
+  general: |
+    Coverage is national + 10 HHS regions + 50 states. Subtype detail (H3N2, H1N1pdm09, B-Yam, B-Vic)
+    lives in the sibling `fluview_public_health_labs` endpoint — would be a separate
+    `delphi-nrevss` source if we want subtype-level granularity.
+
+extra:
+  delphi_endpoint: https://api.delphi.cmu.edu/epidata/fluview_clinical/
+  source_columns_omitted: 3 (release_date, issue, lag — re-derivable from a vintaged ingest)

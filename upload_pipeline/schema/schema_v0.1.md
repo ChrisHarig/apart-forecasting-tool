@@ -60,6 +60,11 @@ vintaged_version_of: null  # null or a single source_id — same data, different
 succeeds: null             # null or a single source_id — institutional successor (different schema, took over the role)
 derived_from: []           # raw sources this is computed from
 
+# Curated — vintaging mode
+vintaging:
+  mode: <full|latest|none>           # 'full' carries every snapshot in the same parquet (requires row-level `as_of`); 'latest' overwrites; 'none' = source not vintaged
+  granularity: <daily|weekly|...>    # how often new snapshots land; null when mode != full
+
 # Mixed — pipeline writes name/dtype; curator writes unit/value_type/description/aggregation.
 # Validator errors if the curated entries don't match the columns the pipeline saw.
 value_columns:
@@ -131,6 +136,8 @@ Every row also carries an optional `location_id_native` column with the source's
 
 When a source publishes location IDs that don't have a clean conversion to *any* known code system (e.g. ad-hoc catchment areas), that's a quality issue with the source, not something the schema accommodates. Mark `availability_notes` accordingly and consider whether the dataset is worth ingesting as-is.
 
+**Synthetic-prefix codes have a registry** (`upload_pipeline/schema/locations/`). Each YAML file maps a prefix family (`US-METRO-*`, `US-FLUSURV-*`, `US-HHS-*`, etc.) to display names. The validator advisory-warns on unknown synthetic codes so a typo doesn't silently land — but doesn't hard-fail, since per-source synthetic prefixes are normal and grow lazily as sources land. Adding a new code is a YAML PR.
+
 ### Cadence
 
 Curated `cadence` is what the source *publishes at*. The pipeline writes `observed_cadence_days` (median diff between consecutive dates) into `computed`; if the two disagree, that's a validation warning, not a hard error — sources occasionally skip weeks.
@@ -156,6 +163,18 @@ Four named relations form a small graph across the org. They're semantically dis
 - **`derived_from`** — points upstream for nowcasts, ensembles, aggregations. A nowcast model output card has `derived_from: [nhsn-hrd, cdc-nssp]`.
 
 All values are EPI-Eval `source_id` slugs. Bidirectional links aren't stored; the dashboard inverts the graph as needed.
+
+### Vintaging
+
+`vintaged_version_of` is a *cross-card relation* — it points to another source that publishes the same data without snapshot history. `vintaging` is a *within-card declaration* — it describes whether *this* card carries snapshot history natively.
+
+- **`vintaging.mode: full`** — every (date, location, …) row is repeated once per snapshot date. The row-level `as_of` column is required; the dashboard groups on `as_of` to render an "as of timestamp X" view, and defaults to the most-recent `as_of` so the card looks single-snapshot until the user opens the time-machine. This is the preferred pattern when the upstream source (Delphi vintaged endpoints, hub `time-series.parquet` files) carries history natively — keep it as one card, not many.
+
+- **`vintaging.mode: latest`** — only the most recent snapshot per (date, location, …) is stored. `as_of` may still be present but isn't a row-key. Use this when storage cost or downstream confusion outweighs the value of the vintage history.
+
+- **`vintaging.mode: none`** — the source publishes a single revision per period and no snapshot dimension exists.
+
+`granularity` documents the cadence at which new snapshots arrive (`daily` for hub `time-series.parquet`, `weekly` for the Delphi vintaged endpoints).
 
 ### Time coverage as union of intervals
 
@@ -209,6 +228,8 @@ Every Parquet/CSV in a dataset repo carries at minimum:
 | `condition`         | string        | for case-register sources | row-level condition slug; see [Long-format / case-register data](#long-format--case-register-data) |
 | `condition_type`    | category      | required when `condition` is present | one of the `condition_type` enum values |
 | `case_status`       | category      | optional | one of the `case_status` enum values; required when source distinguishes confirmed/probable/suspect |
+| `topic`             | string        | for non-illness segmented sources | free-form row-level topic slug; see [Topic-segmented sources](#topic-segmented-sources) |
+| `topic_type`        | category      | required when `topic` is present | one of the `topic_type` enum values |
 | `<value cols>`      | varies        | yes      | source-specific; listed in top-level `value_columns`         |
 | `as_of`             | datetime[UTC] | for vintaged sources | snapshot date this row was reported on               |
 
@@ -243,6 +264,19 @@ But some sources — case-register systems like CDC NNDSS, Brazil SINAN, and oth
 A user querying "all measles data across our org" then writes a single predicate (`condition = 'measles'`) regardless of source.
 
 **Don't use long format when** the source has a small fixed set of measures with rich semantics (NHSN HRD's flu/COVID/RSV admissions + bed counts is wide; NWSS wastewater's per-pathogen viral loads can go either way — choose wide unless contributors will frequently add new pathogens to the same dataset).
+
+### Topic-segmented sources
+
+Not every source's row dimension is a pathogen or syndrome. Mobility data is segmented by *category* (retail, transit, residential); search-trend data is segmented by *query*; news data is segmented by *article subject* or *editorial category*. Forcing those into `condition` would muddy the type — a Wikipedia article isn't a syndrome, a Google Trends query isn't a clinical exposure.
+
+For these sources the schema provides a parallel pair of row-level columns:
+
+- **`topic`** (string, optional) — free-form slug naming the segmentation value (article name, query string, category code).
+- **`topic_type`** (category, required when `topic` is present) — `article | search_query | mobility_category | news_category | product_category | intent | other`. The non-illness analog of `condition_type`.
+
+`topic` is **orthogonal to `condition`**: a row can carry either, both, or neither. A news article tagged with both an editorial category (`topic = 'vaccination'`, `topic_type = 'news_category'`) and a pathogen subject (`condition = 'sars-cov-2'`, `condition_type = 'pathogen'`) uses both simultaneously. Wikipedia pageviews use only `topic` because the article isn't a clinical condition. NNDSS uses only `condition`.
+
+**When in doubt:** ask whether the row dimension would naturally appear in a clinician's chart (→ `condition`) or in a marketing / behavioural / informational catalog (→ `topic`).
 
 ---
 

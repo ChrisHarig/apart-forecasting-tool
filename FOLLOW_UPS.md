@@ -1,52 +1,74 @@
 # Follow-ups
 
-Stuff to come back to once the multi-pane workspace lands. Captured so we
-don't lose them while we're focused on the bigger refactor.
+Open work captured so we don't lose it. Completed items pruned — look
+at git history if you need the original write-ups.
 
-## 1. Chart toolbar box alignment
+## 1. Boundary loading — cold-load perf (continuation)
 
-The **Metric**, **Group by**, and **Filters** boxes in `SourceTimelineChart`
-render at slightly different vertical heights, and the inner controls
-(`<select>`s, the `+` button, the small meta lines) sit at different vertical
-positions across boxes. Audit so all three boxes share a common baseline /
-height and the inner controls line up. Different *horizontal* widths are
-fine — it's the vertical drift that reads sloppy.
+Already shipped: timing logs, per-country-set filter cache, error
+surfacing through the renderer, and a real spinner. If the *cold*
+load is still slow on the iso3166-2 admin-1 file (2.2 MB raw, 757 KB
+gzipped), the next moves are:
 
-## 2. Year-over-year / season-over-season overlay
+1. Convert the admin-1 GeoJSON → TopoJSON (~3-5× smaller on disk; gzip
+   makes it tiny on the wire). Same pattern as `usAtlas`. Vendor the
+   converted file via mapshaper or topojson CLI.
+2. Move the JSON parse off the main thread (Web Worker). Bigger lift,
+   only worth it if (1) isn't enough.
 
-Add a graph option that takes one continuous time axis and slices it into
-recurring periods (years, flu seasons, months, ...), then renders one line
-per period overlaid on a shared X axis (e.g. epiweek 40 → 39). Useful for
-seasonality comparisons — at a glance: "is this year's flu peak earlier
-or later than the last five?".
+## 2. Stratified sampling for large datasets
 
-Non-trivial because it changes both the X axis interpretation (calendar
-date → relative position within a period) and the bucketing logic (we'd
-group by `period × within-period-position` instead of `date`). Probably
-its own chart mode toggle alongside the existing time-series.
+`getDatasetSlice` caps fetches at `MAX_ROWS` (10,000) and pulls rows in
+parquet order — `(date, location_id)` ascending. For datasets larger
+than the cap (`nyt-covid` 2.5M, `jhu-csse-covid` 225k, `rsv-forecast-hub`
+462k, `global-mobility` 11.7M, `owid-covid` 397k, `owid-mpox` 154k,
+`flu-metrocast-hub` 132k), the user only sees the *earliest* rows.
 
-## 3. Rename Group by / Filter; clarify semantics
+The 10k bump fixes everything under that size. For the big sources
+the right answer is stratified sampling: fetch K chunks of `MAX_ROWS / K`
+rows each at evenly-spaced offsets across `[0, total)`. Same total
+fetch volume, temporally representative slice.
 
-We default to **summing per timestamp** (or `mean`/`max` per the
-column's declared aggregation). That makes the current "Group by" a
-*disaggregation* — it splits the default aggregate into multiple lines.
-"Group by" reads like an aggregation operation but it's actually the
-inverse here.
+Implementation sketch:
 
-Likely renames:
+- New `getStratifiedDatasetSlice` in `src/data/hf/rows.ts` — picks
+  K offsets, fetches `MAX_ROWS / K` rows at each.
+- Switch `useDatasetSlice` to call the stratified version when
+  `total > MAX_ROWS`, sequential path when `total ≤ MAX_ROWS`.
+- Update the truncation indicator to distinguish "first 10,000 of N"
+  from "10,000 sampled across N".
 
-- **Group by → Split by** (more accurate to what it does)
-- **Filter → Where** (or keep as Filter, but document; the friction is
-  more about the *combination* with split-by than the name)
+Mostly in `rows.ts`; consumers don't change.
 
-Edge case to think through: when the user splits by column X, does it
-still make sense to allow filtering on column X simultaneously? Probably
-not — pre-filtering before split is fine, but post-filter on the split
-axis is just hiding series. Consider:
+## 3. Seasonal chart — deferred polish
 
-- Hide column X from the filter `+` menu when X is the split axis
-- Or keep it but treat it as "which split values to show" — equivalent
-  to the existing Series picker
+v1 of the year-over-year overlay is shipped. Items deferred from the
+original plan:
 
-Either way: the same column shouldn't be expressible as filter + split
-in two different places.
+- **Per-source `default_period` in card metadata.** So e.g. NHSN HRD
+  defaults to flu-season-northern instead of calendar-year. New
+  optional field in `card.yaml`; reader picks it up; UI uses as default.
+- **Split-by in seasonal mode.** Currently shows a small "Split-by
+  ignored in seasonal mode" badge and proceeds without it. Real story:
+  N split-keys × M periods → potentially explosive line count. Wire
+  through with a warning when the product exceeds ~20.
+- **Partial-period annotation.** Lines that stop mid-period (the
+  in-progress current period, or pre-coverage years) get a small
+  "thru-W14 / partial" badge so the user knows it's incomplete, not
+  abnormally low.
+- **Period-over-period Δ overlay.** Each line shows the difference
+  from the prior period. Useful but a separate mode toggle.
+- **Custom-period definition UI.** Power-user feature; let users
+  define "summer 2024" or arbitrary windows.
+
+## Other (longer-horizon)
+
+- Auto-ingest and update features (cron-driven re-ingests of live sources).
+- Time-series aggregate-on-year/month/week features (downsampling toggles
+  for the time-series chart).
+- SARIMA, ARIMA, DL-Flusight features. Baseline predictions at any given
+  timestamp.
+- TAB / browser keyboard nav.
+- Add datasets-of-predictions, calculate loss vs. truth, leaderboard.
+- Crowdsource predictions from people on models? HF dataset of predictions?
+- Allow local use of this tool without fetching from HF (offline mode).

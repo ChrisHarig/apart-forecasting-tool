@@ -99,7 +99,7 @@ export function makeExplorerPane(sourceId: string, opts: { id?: string } = {}): 
     tab: "graph",
     chart: defaultChart(),
     map: defaultMap(),
-    showTable: false
+    showTable: true
   };
 }
 

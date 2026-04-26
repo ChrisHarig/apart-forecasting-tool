@@ -1,0 +1,138 @@
+pretty_name: WHO FluNet — global weekly flu virology
+license: cc-by-nc-sa-3.0-igo
+size_categories:
+  - 100K<n<1M
+tags:
+  - cadence-weekly
+  - geo-global
+  - surveillance-respiratory
+  - pathogen-influenza
+  - pathogen-rsv
+  - tier-1
+  - availability-open
+
+schema_version: "0.1"
+source_id: who-flunet
+source_url: https://www.who.int/tools/flunet
+manifest_section: "§5.1"
+
+surveillance_category: respiratory
+pathogens:
+  - influenza
+  - influenza-a
+  - influenza-b
+  - h5n1
+  - rsv
+
+availability: open
+availability_notes: null
+access_type: api
+tier: 1
+
+cadence: weekly
+geography_levels:
+  - national
+geography_countries:
+  - multiple
+
+gold_standard_for: []
+vintaged_version_of: null
+succeeds: null
+derived_from: []
+
+value_columns:
+  - name: SPEC_PROCESSED_NB
+    unit: specimens/week
+    value_type: incident
+    description: Specimens processed by participating labs (denominator for % positive)
+    aggregation: sum
+  - name: SPEC_RECEIVED_NB
+    unit: specimens/week
+    value_type: incident
+    description: Specimens received (often slightly higher than processed)
+    aggregation: sum
+  - name: INF_A
+    unit: positives/week
+    value_type: incident
+    description: Specimens positive for influenza A (any subtype)
+    aggregation: sum
+  - name: INF_B
+    unit: positives/week
+    value_type: incident
+    description: Specimens positive for influenza B
+    aggregation: sum
+  - name: INF_ALL
+    unit: positives/week
+    value_type: incident
+    description: All flu positives (A + B + unknown)
+    aggregation: sum
+  - name: INF_NEGATIVE
+    unit: specimens/week
+    value_type: incident
+    description: Specimens negative for flu
+    aggregation: sum
+  - name: AH1N12009
+    unit: positives/week
+    value_type: incident
+    description: 2009 H1N1 pandemic strain
+    aggregation: sum
+  - name: AH1
+    unit: positives/week
+    value_type: incident
+    description: Pre-2009 H1
+    aggregation: sum
+  - name: AH3
+    unit: positives/week
+    value_type: incident
+    description: H3 (incl. H3N2)
+    aggregation: sum
+  - name: AH5
+    unit: positives/week
+    value_type: incident
+    description: H5 (incl. H5N1) — sparse
+    aggregation: sum
+  - name: AH7N9
+    unit: positives/week
+    value_type: incident
+    description: H7N9 — sparse
+    aggregation: sum
+  - name: BVIC_2DEL
+    unit: positives/week
+    value_type: incident
+    description: B/Victoria 2-deletion lineage
+    aggregation: sum
+  - name: BVIC_3DEL
+    unit: positives/week
+    value_type: incident
+    description: B/Victoria 3-deletion lineage
+    aggregation: sum
+  - name: BYAM
+    unit: positives/week
+    value_type: incident
+    description: B/Yamagata (apparently extinct since 2020)
+    aggregation: sum
+  - name: RSV
+    unit: positives/week
+    value_type: incident
+    description: RSV positives — only when the participating lab also reports RSV
+    aggregation: sum
+
+notes:
+  extra_columns:
+    - column: location_name
+      description: WHO country/area/territory name. `location_id` is ISO 3166-1 alpha-2.
+  interpretation_caveats:
+    - column: SPEC_PROCESSED_NB
+      caveat: "Test capacity varies by 10x+ across countries; absolute counts are not comparable. Use % positive (`INF_ALL / SPEC_PROCESSED_NB`)."
+    - column: AH5
+      caveat: "Subtype-specific columns are very sparse; only labs that ran subtyping populate them. A NaN does not mean 'no H5' — it means 'not subtyped'."
+    - column: RSV
+      caveat: "FluNet's RSV column is opportunistic — only populated when the lab also tests for RSV. Coverage is much sparser than the flu columns."
+  general: |
+    The canonical global weekly flu virology feed. Pair with WHO FluID (§5.2) for ILI/SARI
+    rates from the same network. Subtype detail makes this the right ingest for any
+    "is H3 or H1 dominant this season?" question.
+
+extra:
+  source_columns_omitted: ~25 (region/season/hemisphere metadata + several rarely-populated subtype detail columns)
+  who_endpoint_pattern: "OData v3; pagination via $top + $skip"

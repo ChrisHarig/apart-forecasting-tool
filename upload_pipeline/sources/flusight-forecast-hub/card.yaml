@@ -1,0 +1,70 @@
+pretty_name: FluSight Forecast Hub — flu hospital admission target
+license: cc0-1.0
+size_categories:
+  - 1K<n<10K
+tags:
+  - cadence-weekly
+  - geo-us
+  - surveillance-respiratory
+  - pathogen-influenza
+  - tier-1
+  - availability-open
+
+schema_version: "0.1"
+source_id: flusight-forecast-hub
+source_url: https://github.com/cdcepi/FluSight-forecast-hub
+manifest_section: "§4.1"
+
+surveillance_category: respiratory
+pathogens:
+  - influenza
+
+availability: open
+availability_notes: null
+access_type: github
+tier: 1
+
+cadence: weekly
+geography_levels:
+  - national
+  - subnational-state
+geography_countries:
+  - US
+
+gold_standard_for: []
+vintaged_version_of: null
+succeeds: null
+derived_from:
+  - nhsn-hrd
+
+value_columns:
+  - name: value
+    unit: admissions/week
+    value_type: incident
+    description: Confirmed flu hospital admissions for the epiweek (FluSight scoring target)
+    aggregation: sum
+  - name: weekly_rate
+    unit: admissions/week per 100k
+    value_type: rate
+    description: Weekly admission rate per 100k population
+    aggregation: rate
+
+notes:
+  extra_columns:
+    - column: location_name
+      description: State name as published by the hub. `location_id` is FIPS for states / `US` for national.
+  interpretation_caveats:
+    - column: value
+      caveat: |
+        This is the *target truth* file the hub uses for scoring. It is derived from NHSN HRD
+        (`derived_from`) and may lag NHSN by one cycle while the hub freezes the truth value.
+        For the live admissions series use `nhsn-hrd.totalconfflunewadm` directly.
+  general: |
+    This source represents only the **truth** half of the hub. Model forecasts live in
+    `model-output/` in the same repo and will become a separate `flusight-forecast-hub-models`
+    dataset (forecasts are a different shape — one row per (team, model, reference_date,
+    target, horizon, location, output_type, value) — and need a separate schema treatment).
+
+extra:
+  hub_format_note: "Hubverse — see https://hubverse.io/"
+  forecast_models_separate: true

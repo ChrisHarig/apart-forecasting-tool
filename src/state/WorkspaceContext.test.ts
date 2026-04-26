@@ -54,7 +54,7 @@ describe("Workspace pane constructors", () => {
     expect(p.tab).toBe("graph");
     expect(p.chart.metric).toBeNull();
     expect(p.map.metric).toBeNull();
-    expect(p.showTable).toBe(false);
+    expect(p.showTable).toBe(true);
   });
 
   it("makeExplorerPane reuses the supplied id (so converting a browser pane in place keeps its id)", () => {

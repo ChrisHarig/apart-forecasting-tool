@@ -1,0 +1,118 @@
+pretty_name: UKHSA Dashboard — England flu / COVID-19 / RSV weekly
+license: other
+license_name: ogl-uk-3.0
+license_link: https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/
+size_categories:
+  - 1K<n<10K
+tags:
+  - cadence-weekly
+  - geo-gb
+  - surveillance-respiratory
+  - pathogen-influenza
+  - pathogen-sars-cov-2
+  - pathogen-rsv
+  - tier-2
+  - availability-open
+
+schema_version: "0.1"
+source_id: ukhsa-respiratory
+source_url: https://ukhsa-dashboard.data.gov.uk/
+manifest_section: "§5.5"
+
+surveillance_category: respiratory
+pathogens:
+  - influenza
+  - sars-cov-2
+  - rsv
+
+availability: open
+availability_notes: "API is in beta — schema may shift between minor versions."
+access_type: api
+tier: 2
+
+cadence: weekly
+geography_levels:
+  - subnational-state
+geography_countries:
+  - GB
+
+gold_standard_for: []
+vintaged_version_of: null
+succeeds: null
+derived_from: []
+
+# Long-format-by-condition + wide-by-metric. Each row is one (date, England,
+# condition); each metric column has a single coherent unit. Cells are NaN
+# where the source doesn't publish that metric for that condition.
+value_columns:
+  - name: positivity
+    unit: percent (0-100)
+    value_type: proportion
+    description: |
+      Share of specimens positive for the condition, weekly. Flu and RSV
+      values are direct weekly counts; COVID is the 7-day-rolling daily
+      series resampled to Saturday week-end (see caveat).
+    aggregation: rate
+  - name: admission_rate
+    unit: per 100k population
+    value_type: rate
+    description: Weekly hospital admission rate per 100k. Flu + RSV only; COVID NaN.
+    aggregation: rate
+  - name: icu_admission_rate
+    unit: per 100k population
+    value_type: rate
+    description: Weekly ICU/HDU admission rate per 100k. Flu only.
+    aggregation: rate
+  - name: ili_survey_rate
+    unit: per 100k population
+    value_type: rate
+    description: |
+      Weekly ILI cases per 100k from the UKHSA primary-care symptom survey.
+      Flu only (it's an ILI-survey measurement; the syndrome is reported
+      under the influenza topic on UKHSA's side).
+    aggregation: rate
+  - name: survey_participants
+    unit: respondents/week
+    value_type: incident
+    description: ILI survey weekly participant count (denominator-quality indicator). Flu only.
+    aggregation: sum
+
+notes:
+  extra_columns:
+    - column: condition_native
+      description: UKHSA topic name (`Influenza`, `COVID-19`, `RSV`).
+    - column: location_name
+      description: "Always 'England' for this v0.1 ingest. NHS regions and devolved nations would be separate sources."
+  interpretation_caveats:
+    - column: positivity
+      caveat: |
+        COVID positivity comes from `COVID-19_testing_positivity7DayRolling` — a daily
+        7-day-rolling number — resampled to Saturday week-end. Flu and RSV positivity
+        are direct weekly observations. The unit is the same (%) but the smoothing
+        upstream is different; treat the COVID column as smoother by construction.
+    - column: ili_survey_rate
+      caveat: |
+        Self-reported ILI survey, not lab-confirmed. Useful as a covariate for the
+        flu-related rows but not a target.
+    - column: admission_rate
+      caveat: |
+        Source-published per-100k weekly rate. UKHSA's denominator population is
+        England-resident and updates annually; rates across multi-year boundaries
+        carry small denominator drift.
+  general: |
+    Three pathogens, one wide-by-metric table keyed by (date, condition). UKHSA's
+    daily COVID-only metrics (admissions/day, cases/day, occupied beds/day, ONS
+    deaths/day) are intentionally excluded — they don't share units with the
+    flu/RSV weekly per-100k rates and would belong in a sibling
+    `ukhsa-covid-daily` source. England-only; NHS regions / devolved nations
+    reachable through the same API by varying `geography_types` and `geographies`.
+
+extra:
+  api_swagger: https://api.ukhsa-dashboard.data.gov.uk/api/swagger/
+  pathogens_in_dashboard: ["acute-bronchiolitis", "Adenovirus", "COVID-19", "hMPV", "Influenza", "Parainfluenza", "Rhinovirus", "RSV", "+5 syndromic"]
+  excluded_metrics:
+    daily_covid:
+      - COVID-19_cases_casesByDay
+      - COVID-19_healthcare_admissionByDay
+      - COVID-19_healthcare_occupiedBedsByDay
+      - COVID-19_deaths_ONSByDay

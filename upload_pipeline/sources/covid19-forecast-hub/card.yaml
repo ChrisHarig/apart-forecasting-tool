@@ -1,0 +1,59 @@
+pretty_name: COVID-19 Forecast Hub — hospital admissions target
+license: cc0-1.0
+size_categories:
+  - 1K<n<10K
+tags:
+  - cadence-weekly
+  - geo-us
+  - surveillance-respiratory
+  - pathogen-sars-cov-2
+  - tier-1
+  - availability-open
+
+schema_version: "0.1"
+source_id: covid19-forecast-hub
+source_url: https://github.com/CDCgov/covid19-forecast-hub
+manifest_section: "§4.2"
+
+surveillance_category: respiratory
+pathogens:
+  - sars-cov-2
+
+availability: open
+availability_notes: null
+access_type: github
+tier: 1
+
+cadence: weekly
+geography_levels:
+  - national
+  - subnational-state
+geography_countries:
+  - US
+
+gold_standard_for: []
+vintaged_version_of: null
+succeeds: null
+derived_from:
+  - nhsn-hrd
+
+value_columns:
+  - name: value
+    unit: admissions/week
+    value_type: incident
+    description: Confirmed COVID-19 hospital admissions for the epiweek (hub scoring target)
+    aggregation: sum
+
+notes:
+  extra_columns:
+    - column: location_name
+      description: State postal code as published. `location_id` is FIPS / `US`.
+  interpretation_caveats:
+    - column: value
+      caveat: "Mirrors NHSN HRD with hub-side freezing applied — single value per (date, location). Use NHSN HRD directly for the un-frozen series."
+  general: |
+    Truth-only ingest. Model forecasts are a different shape and live in `model-output/`;
+    handle separately.
+
+extra:
+  hub_format_note: "Hubverse"

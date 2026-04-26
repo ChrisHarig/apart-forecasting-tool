@@ -1,0 +1,116 @@
+pretty_name: OWID COVID-19 — global daily compiled
+license: cc-by-4.0
+size_categories:
+  - 100K<n<1M
+tags:
+  - cadence-daily
+  - geo-global
+  - surveillance-respiratory
+  - pathogen-sars-cov-2
+  - tier-2
+  - availability-open
+
+schema_version: "0.1"
+source_id: owid-covid
+source_url: https://github.com/owid/covid-19-data
+manifest_section: "§16.1"
+
+surveillance_category: respiratory
+pathogens:
+  - sars-cov-2
+
+availability: open
+availability_notes: null
+access_type: github
+tier: 2
+
+cadence: daily
+geography_levels:
+  - global
+  - national
+geography_countries:
+  - multiple
+
+gold_standard_for: []
+vintaged_version_of: null
+succeeds: null
+derived_from: []
+
+value_columns:
+  - name: new_cases
+    unit: cases/day
+    value_type: incident
+    description: New confirmed COVID-19 cases reported per day (per OWID's compilation)
+    aggregation: sum
+  - name: new_deaths
+    unit: deaths/day
+    value_type: incident
+    description: New confirmed COVID-19 deaths per day
+    aggregation: sum
+  - name: icu_patients
+    unit: patients
+    value_type: stock
+    description: Patients in ICU with COVID-19 (point-in-time)
+    aggregation: mean
+  - name: hosp_patients
+    unit: patients
+    value_type: stock
+    description: Patients in hospital with COVID-19 (point-in-time)
+    aggregation: mean
+  - name: weekly_icu_admissions
+    unit: admissions/week
+    value_type: incident
+    description: New weekly ICU admissions for COVID-19 (carried on the date OWID assigns within the week)
+    aggregation: sum
+  - name: weekly_hosp_admissions
+    unit: admissions/week
+    value_type: incident
+    description: New weekly hospital admissions for COVID-19
+    aggregation: sum
+  - name: new_tests
+    unit: tests/day
+    value_type: incident
+    description: New tests performed (any type) per day
+    aggregation: sum
+  - name: positive_rate
+    unit: proportion (0-1)
+    value_type: proportion
+    description: Share of COVID-19 tests that are positive
+    aggregation: rate
+  - name: people_vaccinated
+    unit: people
+    value_type: cumulative
+    description: Cumulative number of people who have received at least one vaccine dose
+    aggregation: max
+  - name: people_fully_vaccinated
+    unit: people
+    value_type: cumulative
+    description: Cumulative number of people fully vaccinated under the country's primary protocol
+    aggregation: max
+  - name: total_boosters
+    unit: doses
+    value_type: cumulative
+    description: Cumulative booster doses administered
+    aggregation: max
+
+notes:
+  extra_columns:
+    - column: location_name
+      description: OWID's English country / aggregate name. `location_id` is canonical.
+  interpretation_caveats:
+    - column: new_cases
+      caveat: |
+        Compiled from a mix of national sources with very different definitions and
+        reporting cadences. Many countries publish weekly only; OWID assigns the value
+        to a single day in the week, leaving the surrounding days as 0/NaN. Treat as a
+        low-resolution signal post-2022.
+    - column: positive_rate
+      caveat: "Computed by OWID from `new_tests`. Both inputs are sparsely reported, so this column has heavy missingness."
+  general: |
+    OWID's compilation is the broadest single COVID-19 time series available; it is
+    *not* a primary source. For US analysis, prefer NHSN HRD; for forecast-target use,
+    prefer the relevant forecast hub's truth file.
+
+extra:
+  source_columns_omitted: 70+ smoothing/per-capita derivative columns dropped (recoverable from kept incident columns).
+  owid_iso_aggregates_dropped: ["OWID_AFR", "OWID_ASI", "OWID_EUR", "OWID_EUN", "OWID_HIC", "OWID_LIC", "OWID_LMC", "OWID_NAM", "OWID_OCE", "OWID_SAM", "OWID_UMC"]

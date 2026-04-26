@@ -32,7 +32,7 @@ export function PaneFrame({ pane }: Props) {
     <div
       onClick={() => focusPane(pane.id)}
       className={`flex h-full min-h-0 flex-col overflow-hidden rounded-xl border bg-ink-900/40 transition-colors ${
-        isFocused ? "border-red-500/30" : "border-white/10"
+        isFocused ? "border-sky-500/30" : "border-white/10"
       }`}
     >
       <div className="flex shrink-0 items-center gap-2 border-b border-white/10 bg-black/40 px-3 py-2">

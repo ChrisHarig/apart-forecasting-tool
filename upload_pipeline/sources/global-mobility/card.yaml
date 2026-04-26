@@ -1,0 +1,114 @@
+pretty_name: Google Community Mobility Reports — global daily
+license: cc-by-4.0
+size_categories:
+  - 10M<n<100M
+tags:
+  - cadence-daily
+  - geo-global
+  - surveillance-mobility
+  - tier-2
+  - availability-inactive
+
+schema_version: "0.1"
+source_id: global-mobility
+source_url: https://www.google.com/covid19/mobility/
+manifest_section: "§15.7"
+
+surveillance_category: mobility
+pathogens: []
+
+availability: inactive
+availability_notes: "Google ended data collection 2022-10-15. Historical CSV remains available; not updated."
+access_type: csv
+tier: 2
+
+cadence: daily
+geography_levels:
+  - national
+  - subnational-state
+  - subnational-county
+  - subnational-city
+geography_countries:
+  - multiple
+
+gold_standard_for: []
+vintaged_version_of: null
+succeeds: null
+derived_from: []
+
+value_columns:
+  - name: retail_and_recreation
+    unit: percent change vs. baseline
+    value_type: index
+    description: |
+      Daily % change in visits + length of stay at retail / recreation places
+      (restaurants, cafes, shopping centers, theme parks, museums, libraries,
+      cinemas) compared to the baseline (median value for the 5-week period
+      Jan 3 – Feb 6, 2020).
+    aggregation: mean
+  - name: grocery_and_pharmacy
+    unit: percent change vs. baseline
+    value_type: index
+    description: Daily % change in visits to grocery markets, food warehouses, farmers' markets, specialty food shops, drug stores, pharmacies.
+    aggregation: mean
+  - name: parks
+    unit: percent change vs. baseline
+    value_type: index
+    description: Daily % change in visits to local parks, national parks, public beaches, marinas, dog parks, plazas, public gardens.
+    aggregation: mean
+  - name: transit_stations
+    unit: percent change vs. baseline
+    value_type: index
+    description: Daily % change in visits to public transport hubs (subway, bus, train stations).
+    aggregation: mean
+  - name: workplaces
+    unit: percent change vs. baseline
+    value_type: index
+    description: Daily % change in visits to places of work.
+    aggregation: mean
+  - name: residential
+    unit: percent change vs. baseline
+    value_type: index
+    description: |
+      Daily % change in time spent in places of residence. (Note: this is
+      length-of-stay, not visit count — different metric than the other five.)
+    aggregation: mean
+
+notes:
+  extra_columns:
+    - column: location_name
+      description: |
+        Most-specific populated source field — county name for county rows,
+        metro name for metro rows, ISO sub-region name for state rows, country
+        name for national rows. `location_id` is canonical.
+  interpretation_caveats:
+    - column: residential
+      caveat: |
+        Residential is reported as % change in *length of stay*, not visit
+        count. The other five categories are visit-based. Don't sum or compare
+        directly across these two flavours.
+    - column: parks
+      caveat: |
+        Parks shows extreme seasonal cyclicity (winter vs. summer is a 200%+
+        swing in many countries) that reflects normal seasonality, not
+        pandemic-period behaviour change. Detrend before any pandemic analysis.
+    - column: workplaces
+      caveat: |
+        Holidays / weekends are baked into the baseline since the baseline is
+        a median across weekdays + weekends. Day-of-week cycles in the output
+        are real but reflect *deviation* from the comparable weekday's baseline.
+  general: |
+    Aggregated, anonymised mobility signals derived from Google Maps Location
+    History data. Coverage is global at the national level; subnational depth
+    varies by country (US has county granularity, most others have ISO 3166-2
+    state-level only). Privacy threshold means small geographies / low-traffic
+    days are NaN.
+
+extra:
+  baseline_period: "median value across Jan 3 – Feb 6, 2020 (5 weeks, per weekday)"
+  collection_end_date: "2022-10-15"
+  source_columns_omitted: |
+    `place_id` (Google internal place identifier — opaque), `sub_region_1`,
+    `sub_region_2`, `country_region`, `metro_area` (collapsed into the derived
+    `location_id` + `location_name`), `country_region_code`, `iso_3166_2_code`,
+    `census_fips_code` (likewise collapsed).

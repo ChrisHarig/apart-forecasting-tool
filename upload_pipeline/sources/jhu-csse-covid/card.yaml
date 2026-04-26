@@ -1,0 +1,73 @@
+pretty_name: JHU CSSE COVID-19 — global daily (archived)
+license: cc-by-4.0
+size_categories:
+  - 100K<n<1M
+tags:
+  - cadence-daily
+  - geo-global
+  - surveillance-respiratory
+  - pathogen-sars-cov-2
+  - tier-3
+  - availability-open
+
+schema_version: "0.1"
+source_id: jhu-csse-covid
+source_url: https://github.com/CSSEGISandData/COVID-19
+manifest_section: "§16.2"
+
+surveillance_category: respiratory
+pathogens:
+  - sars-cov-2
+
+availability: inactive
+availability_notes: "Repository archived 2023-03-09. Use as historical reference; not a live feed."
+access_type: github
+tier: 3
+
+cadence: daily
+geography_levels:
+  - national
+geography_countries:
+  - multiple
+
+gold_standard_for: []
+vintaged_version_of: null
+succeeds: null
+derived_from: []
+
+value_columns:
+  - name: confirmed
+    unit: cases (cumulative)
+    value_type: cumulative
+    description: Cumulative confirmed COVID-19 cases reported to JHU CSSE
+    aggregation: max
+  - name: deaths
+    unit: deaths (cumulative)
+    value_type: cumulative
+    description: Cumulative confirmed COVID-19 deaths
+    aggregation: max
+  - name: recovered
+    unit: people (cumulative)
+    value_type: cumulative
+    description: Cumulative recoveries; many jurisdictions stopped reporting this in 2021, so column is mostly NaN late in the series
+    aggregation: max
+
+notes:
+  extra_columns:
+    - column: location_name
+      description: JHU's English country name. `location_id` is canonical.
+  interpretation_caveats:
+    - column: recovered
+      caveat: "Most countries stopped reporting recoveries by 2021-Q3; this column is functionally dead post-2021. Don't use as a target."
+    - column: confirmed
+      caveat: |
+        JHU compiled from ad-hoc national sources; definitions, lab criteria, and reporting cadence vary
+        wildly between countries and over time. Treat as a global-shape signal, not a comparable rate.
+  general: |
+    JHU stopped active maintenance 2023-03-09 and archived the repo. Province-level rolls
+    are present in the source files but dropped here (province names are free-text, not
+    ISO 3166-2; a per-country crosswalk is needed and is out of scope for this v0.1 ingest).
+
+extra:
+  archive_date: "2023-03-09"
+  province_level_dropped: true
