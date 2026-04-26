@@ -301,6 +301,283 @@ class UploadedForecastPredictionPoint(Base):
     model: Mapped["ForecastModel"] = relationship(back_populates="uploaded_prediction_points")
 
 
+class ForecastBenchmarkDatasetSnapshot(Base):
+    __tablename__ = "forecast_benchmark_dataset_snapshots"
+    __table_args__ = (
+        Index("ix_forecast_dataset_country_created", "country_iso3", "created_at"),
+        Index("ix_forecast_dataset_series", "country_iso3", "source_id", "metric"),
+        Index("ix_forecast_dataset_hash", "dataset_hash"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    country_iso3: Mapped[str] = mapped_column(ForeignKey("countries.iso3"), index=True)
+    source_id: Mapped[str] = mapped_column(String(96), index=True)
+    signal_category: Mapped[str | None] = mapped_column(String(96), nullable=True, index=True)
+    metric: Mapped[str] = mapped_column(String(255), index=True)
+    unit: Mapped[str | None] = mapped_column(String(96), nullable=True)
+    frequency: Mapped[str] = mapped_column(String(32), default="weekly")
+    horizon_periods: Mapped[int] = mapped_column(Integer, default=4)
+    split_strategy: Mapped[str] = mapped_column(String(64), default="last_n_periods")
+    train_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    train_end: Mapped[date | None] = mapped_column(Date, nullable=True)
+    test_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    test_end: Mapped[date | None] = mapped_column(Date, nullable=True)
+    target_dates_json: Mapped[list] = mapped_column(JSON, default=list)
+    observation_ids_json: Mapped[list] = mapped_column(JSON, default=list)
+    train_observation_ids_json: Mapped[list] = mapped_column(JSON, default=list)
+    test_observation_ids_json: Mapped[list] = mapped_column(JSON, default=list)
+    train_rows_json: Mapped[list] = mapped_column(JSON, default=list)
+    test_rows_json: Mapped[list] = mapped_column(JSON, default=list)
+    dataset_hash: Mapped[str] = mapped_column(String(128), index=True)
+    status: Mapped[str] = mapped_column(String(64), default="ready")
+    quality_warnings_json: Mapped[list] = mapped_column(JSON, default=list)
+    limitations_json: Mapped[list] = mapped_column(JSON, default=list)
+    provenance_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    runs: Mapped[list["ForecastBenchmarkRun"]] = relationship(back_populates="dataset_snapshot")
+    prediction_sets: Mapped[list["UploadedPredictionSet"]] = relationship(back_populates="dataset_snapshot")
+
+
+class ForecastChallengeSnapshot(Base):
+    __tablename__ = "forecast_challenge_snapshots"
+    __table_args__ = (
+        Index("ix_forecast_challenge_country_created", "country_iso3", "created_at"),
+        Index("ix_forecast_challenge_series", "country_iso3", "source_id", "metric"),
+        Index("ix_forecast_challenge_mode_status", "mode", "status"),
+        Index("ix_forecast_challenge_hash", "dataset_hash"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    mode: Mapped[str] = mapped_column(String(64), index=True)
+    country_iso3: Mapped[str] = mapped_column(ForeignKey("countries.iso3"), index=True)
+    source_id: Mapped[str] = mapped_column(String(96), index=True)
+    signal_category: Mapped[str | None] = mapped_column(String(96), nullable=True, index=True)
+    metric: Mapped[str] = mapped_column(String(255), index=True)
+    unit: Mapped[str | None] = mapped_column(String(96), nullable=True)
+    frequency: Mapped[str] = mapped_column(String(32), default="weekly")
+    horizon_periods: Mapped[int] = mapped_column(Integer, default=4)
+    split_strategy: Mapped[str] = mapped_column(String(64), default="last_n_periods")
+    cutoff_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    train_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    train_end: Mapped[date | None] = mapped_column(Date, nullable=True)
+    target_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    target_end: Mapped[date | None] = mapped_column(Date, nullable=True)
+    target_dates_json: Mapped[list] = mapped_column(JSON, default=list)
+    observation_ids_json: Mapped[list] = mapped_column(JSON, default=list)
+    train_observation_ids_json: Mapped[list] = mapped_column(JSON, default=list)
+    holdout_observation_ids_json: Mapped[list] = mapped_column(JSON, default=list)
+    train_rows_json: Mapped[list] = mapped_column(JSON, default=list)
+    holdout_rows_json: Mapped[list] = mapped_column(JSON, default=list)
+    dataset_hash: Mapped[str] = mapped_column(String(128), index=True)
+    status: Mapped[str] = mapped_column(String(64), default="draft", index=True)
+    quality_warnings_json: Mapped[list] = mapped_column(JSON, default=list)
+    limitations_json: Mapped[list] = mapped_column(JSON, default=list)
+    provenance_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, onupdate=utc_now)
+
+    prediction_sets: Mapped[list["PredictionSet"]] = relationship(back_populates="challenge", cascade="all, delete-orphan")
+    scores: Mapped[list["ForecastScore"]] = relationship(back_populates="challenge", cascade="all, delete-orphan")
+
+
+class Submitter(Base):
+    __tablename__ = "submitters"
+    __table_args__ = (
+        Index("ix_submitters_verification", "verification_status"),
+        Index("ix_submitters_display_org", "display_name", "organization"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    display_name: Mapped[str] = mapped_column(String(255), index=True)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    organization: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    affiliation_type: Mapped[str | None] = mapped_column(String(96), nullable=True)
+    verification_status: Mapped[str] = mapped_column(String(64), default="unverified", index=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, onupdate=utc_now)
+
+    prediction_sets: Mapped[list["PredictionSet"]] = relationship(back_populates="submitter")
+    uploaded_prediction_sets: Mapped[list["UploadedPredictionSet"]] = relationship(back_populates="submitter")
+
+
+class PredictionSet(Base):
+    __tablename__ = "prediction_sets"
+    __table_args__ = (
+        Index("ix_prediction_sets_challenge_model", "challenge_id", "model_id"),
+        Index("ix_prediction_sets_series", "country_iso3", "source_id", "metric"),
+        Index("ix_prediction_sets_source_track", "prediction_source", "submission_track"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    challenge_id: Mapped[int] = mapped_column(ForeignKey("forecast_challenge_snapshots.id"), index=True)
+    model_id: Mapped[str] = mapped_column(String(128), index=True)
+    model_name: Mapped[str] = mapped_column(String(255))
+    prediction_source: Mapped[str] = mapped_column(String(64), default="built_in", index=True)
+    submission_track: Mapped[str] = mapped_column(String(64), default="internal_baseline", index=True)
+    review_status: Mapped[str] = mapped_column(String(64), default="approved", index=True)
+    validation_status: Mapped[str] = mapped_column(String(64), default="valid_for_snapshot", index=True)
+    scoring_status: Mapped[str] = mapped_column(String(64), default="unscored", index=True)
+    submitter_id: Mapped[int | None] = mapped_column(ForeignKey("submitters.id"), nullable=True, index=True)
+    country_iso3: Mapped[str] = mapped_column(ForeignKey("countries.iso3"), index=True)
+    source_id: Mapped[str] = mapped_column(String(96), index=True)
+    signal_category: Mapped[str | None] = mapped_column(String(96), nullable=True, index=True)
+    metric: Mapped[str] = mapped_column(String(255), index=True)
+    unit: Mapped[str | None] = mapped_column(String(96), nullable=True)
+    frequency: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    horizon_periods: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    submitter_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    submitter_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    organization: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    method_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    model_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    code_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    provenance_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    visibility: Mapped[str] = mapped_column(String(32), default="public", index=True)
+    disclosure_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    limitations_json: Mapped[list] = mapped_column(JSON, default=list)
+    warnings_json: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, onupdate=utc_now)
+
+    challenge: Mapped["ForecastChallengeSnapshot"] = relationship(back_populates="prediction_sets")
+    submitter: Mapped["Submitter | None"] = relationship(back_populates="prediction_sets")
+    points: Mapped[list["PredictionPoint"]] = relationship(back_populates="prediction_set", cascade="all, delete-orphan")
+    scores: Mapped[list["ForecastScore"]] = relationship(back_populates="prediction_set", cascade="all, delete-orphan")
+    review_decisions: Mapped[list["ReviewDecision"]] = relationship(
+        back_populates="prediction_set",
+        cascade="all, delete-orphan",
+    )
+
+
+class PredictionPoint(Base):
+    __tablename__ = "prediction_points"
+    __table_args__ = (Index("ix_prediction_points_set_date", "prediction_set_id", "target_date"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    prediction_set_id: Mapped[int] = mapped_column(ForeignKey("prediction_sets.id"), index=True)
+    target_date: Mapped[date] = mapped_column(Date, index=True)
+    predicted_value: Mapped[float] = mapped_column(Float)
+    lower: Mapped[float | None] = mapped_column(Float, nullable=True)
+    upper: Mapped[float | None] = mapped_column(Float, nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(96), nullable=True)
+    generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    provenance_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    prediction_set: Mapped["PredictionSet"] = relationship(back_populates="points")
+
+
+class ForecastScore(Base):
+    __tablename__ = "forecast_scores"
+    __table_args__ = (
+        Index("ix_forecast_scores_challenge_status", "challenge_id", "status"),
+        Index("ix_forecast_scores_prediction_set", "prediction_set_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    challenge_id: Mapped[int] = mapped_column(ForeignKey("forecast_challenge_snapshots.id"), index=True)
+    prediction_set_id: Mapped[int] = mapped_column(ForeignKey("prediction_sets.id"), index=True)
+    status: Mapped[str] = mapped_column(String(64), default="pending_truth", index=True)
+    mae: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rmse: Mapped[float | None] = mapped_column(Float, nullable=True)
+    smape: Mapped[float | None] = mapped_column(Float, nullable=True)
+    n_scored: Mapped[int] = mapped_column(Integer, default=0)
+    n_expected: Mapped[int] = mapped_column(Integer, default=0)
+    rank_smape: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rank_rmse: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rank_mae: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    warnings_json: Mapped[list] = mapped_column(JSON, default=list)
+    limitations_json: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, onupdate=utc_now)
+
+    challenge: Mapped["ForecastChallengeSnapshot"] = relationship(back_populates="scores")
+    prediction_set: Mapped["PredictionSet"] = relationship(back_populates="scores")
+
+
+class ReviewDecision(Base):
+    __tablename__ = "review_decisions"
+    __table_args__ = (Index("ix_review_decisions_prediction_set_created", "prediction_set_id", "created_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    prediction_set_id: Mapped[int] = mapped_column(ForeignKey("prediction_sets.id"), index=True)
+    review_status: Mapped[str] = mapped_column(String(64), index=True)
+    reviewer_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    prediction_set: Mapped["PredictionSet"] = relationship(back_populates="review_decisions")
+
+
+class UploadedPredictionSet(Base):
+    __tablename__ = "uploaded_prediction_sets"
+    __table_args__ = (
+        Index("ix_uploaded_prediction_sets_lookup", "country_iso3", "source_id", "metric"),
+        Index("ix_uploaded_prediction_sets_snapshot", "benchmark_dataset_snapshot_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    benchmark_dataset_snapshot_id: Mapped[int | None] = mapped_column(
+        ForeignKey("forecast_benchmark_dataset_snapshots.id"),
+        nullable=True,
+        index=True,
+    )
+    model_id: Mapped[str] = mapped_column(String(128), index=True)
+    model_name: Mapped[str] = mapped_column(String(255))
+    country_iso3: Mapped[str] = mapped_column(ForeignKey("countries.iso3"), index=True)
+    source_id: Mapped[str] = mapped_column(String(96), index=True)
+    metric: Mapped[str] = mapped_column(String(255), index=True)
+    unit: Mapped[str | None] = mapped_column(String(96), nullable=True)
+    frequency: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    horizon_periods: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    target_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    target_end: Mapped[date | None] = mapped_column(Date, nullable=True)
+    provenance_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    user_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    validation_status: Mapped[str] = mapped_column(String(64), default="stored_unmatched")
+    submitter_id: Mapped[int | None] = mapped_column(ForeignKey("submitters.id"), nullable=True, index=True)
+    submitter_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    submitter_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    organization: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    submission_track: Mapped[str] = mapped_column(String(64), default="public", index=True)
+    review_status: Mapped[str] = mapped_column(String(64), default="unreviewed", index=True)
+    visibility: Mapped[str] = mapped_column(String(32), default="public", index=True)
+    method_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    model_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    code_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    disclosure_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    limitations_json: Mapped[list] = mapped_column(JSON, default=list)
+    validation_warnings_json: Mapped[list] = mapped_column(JSON, default=list)
+    validation_errors_json: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    dataset_snapshot: Mapped["ForecastBenchmarkDatasetSnapshot | None"] = relationship(back_populates="prediction_sets")
+    submitter: Mapped["Submitter | None"] = relationship(back_populates="uploaded_prediction_sets")
+    points: Mapped[list["UploadedPredictionPoint"]] = relationship(
+        back_populates="prediction_set",
+        cascade="all, delete-orphan",
+    )
+
+
+class UploadedPredictionPoint(Base):
+    __tablename__ = "uploaded_prediction_points"
+    __table_args__ = (Index("ix_uploaded_prediction_points_set_date", "prediction_set_id", "target_date"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    prediction_set_id: Mapped[int] = mapped_column(ForeignKey("uploaded_prediction_sets.id"), index=True)
+    target_date: Mapped[date] = mapped_column(Date, index=True)
+    predicted_value: Mapped[float] = mapped_column(Float)
+    lower: Mapped[float | None] = mapped_column(Float, nullable=True)
+    upper: Mapped[float | None] = mapped_column(Float, nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(96), nullable=True)
+    generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    provenance_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+
+    prediction_set: Mapped["UploadedPredictionSet"] = relationship(back_populates="points")
+
+
 class ForecastBenchmarkRun(Base):
     __tablename__ = "forecast_benchmark_runs"
     __table_args__ = (
@@ -309,6 +586,11 @@ class ForecastBenchmarkRun(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    dataset_snapshot_id: Mapped[int | None] = mapped_column(
+        ForeignKey("forecast_benchmark_dataset_snapshots.id"),
+        nullable=True,
+        index=True,
+    )
     country_iso3: Mapped[str] = mapped_column(ForeignKey("countries.iso3"), index=True)
     source_id: Mapped[str] = mapped_column(String(96), index=True)
     metric: Mapped[str] = mapped_column(String(255), index=True)
@@ -318,6 +600,7 @@ class ForecastBenchmarkRun(Base):
     train_start: Mapped[date | None] = mapped_column(Date, nullable=True)
     train_end: Mapped[date | None] = mapped_column(Date, nullable=True)
     requested_model_ids: Mapped[list] = mapped_column(JSON, default=list)
+    uploaded_prediction_set_ids: Mapped[list] = mapped_column(JSON, default=list)
     output_status: Mapped[str] = mapped_column(String(64), default="complete")
     explanation: Mapped[str] = mapped_column(Text)
     warnings: Mapped[list] = mapped_column(JSON, default=list)
@@ -326,6 +609,7 @@ class ForecastBenchmarkRun(Base):
     data_quality_notes: Mapped[list] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
+    dataset_snapshot: Mapped["ForecastBenchmarkDatasetSnapshot | None"] = relationship(back_populates="runs")
     results: Mapped[list["ForecastBenchmarkResult"]] = relationship(
         back_populates="benchmark_run",
         cascade="all, delete-orphan",
@@ -338,9 +622,15 @@ class ForecastBenchmarkResult(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     benchmark_run_id: Mapped[int] = mapped_column(ForeignKey("forecast_benchmark_runs.id"), index=True)
+    dataset_snapshot_id: Mapped[int | None] = mapped_column(
+        ForeignKey("forecast_benchmark_dataset_snapshots.id"),
+        nullable=True,
+        index=True,
+    )
     model_id: Mapped[str] = mapped_column(String(128), index=True)
     model_name: Mapped[str] = mapped_column(String(255))
     model_kind: Mapped[str] = mapped_column(String(64))
+    result_type: Mapped[str] = mapped_column(String(64), default="builtin_model")
     status: Mapped[str] = mapped_column(String(64), default="complete")
     mae: Mapped[float | None] = mapped_column(Float, nullable=True)
     rmse: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -351,10 +641,13 @@ class ForecastBenchmarkResult(Base):
     train_end: Mapped[date | None] = mapped_column(Date, nullable=True)
     test_start: Mapped[date | None] = mapped_column(Date, nullable=True)
     test_end: Mapped[date | None] = mapped_column(Date, nullable=True)
+    rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
     provenance_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     warnings: Mapped[list] = mapped_column(JSON, default=list)
     limitations: Mapped[list] = mapped_column(JSON, default=list)
     data_quality_notes: Mapped[list] = mapped_column(JSON, default=list)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
     benchmark_run: Mapped["ForecastBenchmarkRun"] = relationship(back_populates="results")
     points: Mapped[list["ForecastBenchmarkPredictionPoint"]] = relationship(
@@ -371,9 +664,11 @@ class ForecastBenchmarkPredictionPoint(Base):
     benchmark_result_id: Mapped[int] = mapped_column(ForeignKey("forecast_benchmark_results.id"), index=True)
     date: Mapped[date] = mapped_column(Date)
     observed_value: Mapped[float] = mapped_column(Float)
-    predicted_value: Mapped[float] = mapped_column(Float)
+    predicted_value: Mapped[float | None] = mapped_column(Float, nullable=True)
     lower: Mapped[float | None] = mapped_column(Float, nullable=True)
     upper: Mapped[float | None] = mapped_column(Float, nullable=True)
+    absolute_error: Mapped[float | None] = mapped_column(Float, nullable=True)
+    percentage_error: Mapped[float | None] = mapped_column(Float, nullable=True)
     unit: Mapped[str | None] = mapped_column(String(96), nullable=True)
 
     benchmark_result: Mapped["ForecastBenchmarkResult"] = relationship(back_populates="points")
