@@ -1,10 +1,13 @@
-import { DashboardShell } from "./components/Layout/DashboardShell";
+import { WorkspaceShell } from "./components/Layout/WorkspaceShell";
 import { DashboardProvider } from "./state/DashboardContext";
+import { WorkspaceProvider } from "./state/WorkspaceContext";
 
 export default function App() {
   return (
     <DashboardProvider>
-      <DashboardShell />
+      <WorkspaceProvider>
+        <WorkspaceShell />
+      </WorkspaceProvider>
     </DashboardProvider>
   );
 }

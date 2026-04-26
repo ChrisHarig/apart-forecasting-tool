@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUpRight, Check, ChevronDown, ChevronRight, ExternalLink, Plus, RefreshCw, Search } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ArrowUpRight, ChevronDown, ChevronRight, ExternalLink, RefreshCw, Search } from "lucide-react";
 import { useDashboard } from "../../state/DashboardContext";
 import { useRecentRows } from "../../data/hf/hooks";
 import type { RecentRowsResult } from "../../data/hf/rows";
@@ -7,8 +7,15 @@ import type { SourceMetadata } from "../../types/source";
 
 const STALE_THRESHOLD_DAYS = 90;
 
-export function FeedPage() {
-  const { catalog, refreshCatalog, scrollTargetId, setScrollTarget } = useDashboard();
+interface FeedPageProps {
+  // Called when the user clicks "Open data" on a card. The host (a browser
+  // pane) decides what to do — typically convert itself to an explorer
+  // pane for this source.
+  onOpen: (sourceId: string) => void;
+}
+
+export function FeedPage({ onOpen }: FeedPageProps) {
+  const { catalog, refreshCatalog } = useDashboard();
   const [query, setQuery] = useState("");
 
   const visibleSources = useMemo(() => {
@@ -24,7 +31,7 @@ export function FeedPage() {
   }, [catalog.data, query]);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 p-3">
       <header className="flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-black/60 px-4 py-2.5">
         <div className="flex items-baseline gap-2">
           <h1 className="text-sm font-semibold text-white">EPI-Eval datasets</h1>
@@ -82,12 +89,7 @@ export function FeedPage() {
       {catalog.status === "ready" && (
         <ul className="space-y-1.5">
           {visibleSources.map((s) => (
-            <DatasetCard
-              key={s.id}
-              source={s}
-              autoExpand={s.id === scrollTargetId}
-              onAutoConsumed={() => setScrollTarget(null)}
-            />
+            <DatasetCard key={s.id} source={s} onOpen={onOpen} />
           ))}
         </ul>
       )}
@@ -97,29 +99,14 @@ export function FeedPage() {
 
 interface CardProps {
   source: SourceMetadata;
-  autoExpand: boolean;
-  onAutoConsumed: () => void;
+  onOpen: (sourceId: string) => void;
 }
 
-function DatasetCard({ source, autoExpand, onAutoConsumed }: CardProps) {
-  const { selectedSourceIds, toggleSourceSelected, openExplorer } = useDashboard();
-  const selected = selectedSourceIds.includes(source.id);
+function DatasetCard({ source, onOpen }: CardProps) {
   const [expanded, setExpanded] = useState(false);
-  const containerRef = useRef<HTMLLIElement | null>(null);
-
   const recent = useRecentRows(source.id, 4, source.computed?.row_count);
-
-  useEffect(() => {
-    if (autoExpand) {
-      setExpanded(true);
-      containerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      onAutoConsumed();
-    }
-  }, [autoExpand, onAutoConsumed]);
-
   const live = useMemo(() => isLive(source, recent.data), [source, recent.data]);
 
-  // Compact metadata pills shown on the always-visible row.
   const metaPills: string[] = [];
   if (source.cadence) metaPills.push(source.cadence);
   if (source.surveillance_category !== "none") metaPills.push(source.surveillance_category);
@@ -127,22 +114,23 @@ function DatasetCard({ source, autoExpand, onAutoConsumed }: CardProps) {
   if (source.geography_countries.length > 0) metaPills.push(source.geography_countries.slice(0, 2).join("·"));
 
   return (
-    <li
-      ref={containerRef}
-      className={`rounded-lg border bg-white/[0.03] ${
-        selected ? "border-red-500/40" : "border-white/10"
-      }`}
-    >
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          aria-expanded={expanded}
-          aria-label={expanded ? "Collapse" : "Expand"}
-          className="rounded p-0.5 text-neutral-400 hover:bg-white/5 hover:text-white"
-        >
+    <li className="rounded-lg border border-white/10 bg-white/[0.03]">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => setExpanded((v) => !v)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setExpanded((v) => !v);
+          }
+        }}
+        aria-expanded={expanded}
+        className="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-3 py-2 transition hover:bg-white/[0.02]"
+      >
+        <span className="rounded p-0.5 text-neutral-400" aria-hidden="true">
           {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-        </button>
+        </span>
 
         <LiveBadge live={live} latestDate={recent.data?.latestDate ?? null} />
 
@@ -163,6 +151,7 @@ function DatasetCard({ source, autoExpand, onAutoConsumed }: CardProps) {
               href={source.source_url}
               target="_blank"
               rel="noreferrer"
+              onClick={(e) => e.stopPropagation()}
               className="flex items-center gap-1 rounded-md border border-white/10 px-2 py-0.5 text-[11px] text-neutral-200 hover:border-red-500 hover:text-red-200"
               title="Open at Huggingface"
             >
@@ -171,29 +160,12 @@ function DatasetCard({ source, autoExpand, onAutoConsumed }: CardProps) {
           )}
           <button
             type="button"
-            onClick={() => toggleSourceSelected(source.id)}
-            aria-pressed={selected}
-            className={`flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold transition ${
-              selected
-                ? "border-red-500/60 bg-red-700/40 text-red-100 hover:bg-red-700/55"
-                : "border-white/15 bg-white/[0.04] text-neutral-200 hover:border-red-500 hover:text-red-200"
-            }`}
-          >
-            {selected ? (
-              <>
-                <Check className="h-3 w-3" /> Selected
-              </>
-            ) : (
-              <>
-                <Plus className="h-3 w-3" /> Add
-              </>
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={() => openExplorer(source.id)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpen(source.id);
+            }}
             className="flex items-center gap-1 rounded-md border border-red-500/40 bg-red-700/30 px-2 py-0.5 text-[11px] font-semibold text-red-100 hover:border-red-500/60 hover:bg-red-700/45"
-            title="Open in Explorer"
+            title="Open in this pane"
           >
             Open data <ArrowUpRight className="h-3 w-3" />
           </button>
@@ -202,9 +174,7 @@ function DatasetCard({ source, autoExpand, onAutoConsumed }: CardProps) {
 
       {expanded && (
         <div className="border-t border-white/10 px-4 py-3">
-          {source.description && (
-            <p className="text-xs leading-5 text-neutral-300">{source.description}</p>
-          )}
+          {source.description && <p className="text-xs leading-5 text-neutral-300">{source.description}</p>}
           <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] text-neutral-300">
             {source.cadence && <Tag>{source.cadence}</Tag>}
             {source.surveillance_category !== "none" && <Tag>{source.surveillance_category}</Tag>}
