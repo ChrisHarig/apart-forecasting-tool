@@ -48,6 +48,11 @@ SOURCE_COLUMNS = [
     "T_res",
 ]
 
+# Per-country temporal cadences vary; we keep only Week/Month rows so the
+# dataset is series-shaped. Annual aggregates can be reconstructed by summing
+# the kept rows in the dashboard rather than carrying coarse pre-aggregates.
+KEPT_TEMPORAL_RES = {"Week", "Month"}
+
 # OpenDengue's case definitions don't all map cleanly onto the schema's
 # four-tier case_status enum (confirmed | probable | suspect | not-classified).
 # We use a relative-equivalence mapping: "Probable and confirmed" gets the
@@ -82,6 +87,11 @@ def iso3_to_iso2(code: str) -> str | None:
 
 def parse_normalize(raw: pd.DataFrame) -> pd.DataFrame:
     df = raw[SOURCE_COLUMNS].copy()
+
+    # Drop coarse temporal aggregates — these don't form a time series. The
+    # dashboard can sum Week/Month rows on the fly when an annual roll-up is
+    # needed.
+    df = df[df["T_res"].isin(KEPT_TEMPORAL_RES)].copy()
 
     # ISO3 → ISO2. OpenDengue uses ISO 3166-1 alpha-3 in ISO_A0; we normalize
     # to alpha-2 to match the EPI-Eval national location_id convention.

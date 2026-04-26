@@ -3,7 +3,6 @@ import { SideNav } from "../Navigation/SideNav";
 import { useDashboard } from "../../state/DashboardContext";
 import { FeedPage } from "../Feed/FeedPage";
 import { ExplorerPage } from "../Explorer/ExplorerPage";
-import { MapPage } from "../Map/MapPage";
 import { NewsPage } from "../News/NewsPage";
 
 export function DashboardShell() {
@@ -21,7 +20,6 @@ export function DashboardShell() {
 
   let content;
   if (view === "explorer") content = <ExplorerPage />;
-  else if (view === "map") content = <MapPage />;
   else if (view === "news") content = <NewsPage />;
   else content = <FeedPage />;
 

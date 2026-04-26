@@ -1,4 +1,4 @@
-import { Activity, Globe2, Newspaper, TableProperties } from "lucide-react";
+import { Activity, Newspaper, TableProperties } from "lucide-react";
 import type { ComponentType, SVGProps } from "react";
 import type { DashboardView } from "../../types/dashboard";
 
@@ -11,7 +11,6 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { id: "feed", label: "Feed", icon: Activity },
   { id: "explorer", label: "Explorer", icon: TableProperties },
-  { id: "map", label: "Map", icon: Globe2 },
   { id: "news", label: "News", icon: Newspaper }
 ];
 

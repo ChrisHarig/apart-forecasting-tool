@@ -28,6 +28,11 @@ export function iso3ToCountryName(iso3: string | undefined): string {
   return countries.getName(iso3.toUpperCase(), "en") ?? iso3.toUpperCase();
 }
 
+export function iso2ToIso3(iso2: string | undefined): string | null {
+  if (!iso2) return null;
+  return countries.alpha2ToAlpha3(iso2.toUpperCase()) ?? null;
+}
+
 export function normalizeIso3(value: string | undefined): string | null {
   if (!value) return null;
   const trimmed = value.trim();

@@ -53,7 +53,7 @@ notes:
     - column: case_definition
       description: "Source-original case definition: `Suspected`, `Probable`, `Confirmed`, `Probable and confirmed`, `Suspected and confirmed`, `Total`. Preserved alongside the schema-standard `case_status` so original fidelity isn't lost. The same (country, date) cell can have multiple rows when the source distinguishes definitions — filter to one for a single time series."
     - column: temporal_resolution
-      description: "Per-row temporal granularity (`Week`, `Month`, `Year`, `Total`). Varies by country and over time; some countries only report annually or as a single grand total. Filter to one resolution per country before treating the rows as a continuous time series."
+      description: "Per-row temporal granularity (`Week` or `Month`). Coarser source aggregates (`Year`, `Total`) are filtered out at ingest — the dashboard can sum kept rows on the fly when an annual roll-up is needed."
     - column: location_name
       description: Source's English country name (uppercase). `location_id` (ISO 3166-1 alpha-2) is canonical.
   interpretation_caveats:
@@ -64,7 +64,7 @@ notes:
     - column: case_definition
       caveat: "`Probable and confirmed` and `Suspected and confirmed` are *summed* categories from sources that combine tiers — they are not standalone classifications. Don't sum them with `Confirmed`/`Probable`/`Suspected` rows from the same country and date."
     - column: temporal_resolution
-      caveat: "A country may switch between Week, Month, Year, and Total over its history. Pick one resolution per country when constructing a continuous series; don't naively concatenate rows of different temporal_resolution. `Year` rows have calendar_end_date = Dec 31 of that year; `Total` rows have calendar_end_date = the end of the source's reporting period."
+      caveat: "A country may switch between Week and Month over its history. Pick one resolution per country when constructing a continuous series; don't naively concatenate rows of different temporal_resolution."
   general: |
     OpenDengue (Clarke et al. 2024, https://doi.org/10.1038/s41597-024-03120-7) is a
     standardized archive of dengue case reports from public national surveillance
@@ -72,12 +72,13 @@ notes:
     (`Spatial_extract`, `Temporal_extract`) are larger and could be ingested as
     sibling datasets later (`opendengue-admin1`, `opendengue-admin2`).
 
-    Coverage spans 1924-present, but per-country availability varies widely —
-    Brazil has weekly data 2014+, others may report only annual aggregates or a
-    single Total row. All four temporal resolutions are preserved so countries
-    that only report annually or with a single grand-total row still appear in
-    the catalog. Use the `case_status` / `case_definition` and
-    `temporal_resolution` row-level columns to construct a coherent series.
+    Coverage spans 1993-present (with a small 1924-1925 fragment), but
+    per-country availability varies widely — Brazil has weekly data 2014+,
+    others only monthly. Annual and Total aggregates from the source are
+    filtered out so the dataset is series-shaped; sum kept rows in the
+    dashboard when an annual roll-up is needed. Use the `case_status` /
+    `case_definition` and `temporal_resolution` row-level columns to
+    construct a coherent series.
 
 extra:
   release_tag: V1.3
@@ -93,3 +94,6 @@ extra:
     "Suspected and confirmed": suspect
     Total: not-classified
   case_definition_normalization: "lowercase 'confirmed' rows in source were merged with 'Confirmed' to deduplicate filter values"
+  filtered_temporal_resolutions:
+    - Year
+    - Total

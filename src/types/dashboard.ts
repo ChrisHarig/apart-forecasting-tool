@@ -1,6 +1,6 @@
-export type DashboardView = "feed" | "explorer" | "map" | "news";
+export type DashboardView = "feed" | "explorer" | "news";
 
-export const DASHBOARD_VIEWS: DashboardView[] = ["feed", "explorer", "map", "news"];
+export const DASHBOARD_VIEWS: DashboardView[] = ["feed", "explorer", "news"];
 
 export interface SelectedCountry {
   iso3: string;

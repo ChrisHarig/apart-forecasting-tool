@@ -59,9 +59,9 @@ const DashboardContext = createContext<DashboardContextValue | null>(null);
 
 export function DashboardProvider({ children }: { children: ReactNode }) {
   const [view, setViewState] = useState<DashboardView>(() => {
-    const stored = loadJson<DashboardView | "sources" | "graph">(VIEW_KEY, "feed");
+    const stored = loadJson<DashboardView | "sources" | "graph" | "map">(VIEW_KEY, "feed");
     // Old views may still be in localStorage from earlier builds.
-    return stored === "feed" || stored === "explorer" || stored === "map" || stored === "news" ? stored : "feed";
+    return stored === "feed" || stored === "explorer" || stored === "news" ? stored : "feed";
   });
   const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>(() => loadJson<string[]>(SELECTED_KEY, []));
   const [scrollTargetId, setScrollTargetIdState] = useState<string | null>(() => loadJson<string | null>(SCROLL_TARGET_KEY, null));

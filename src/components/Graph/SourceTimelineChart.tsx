@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, X } from "lucide-react";
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipProps } from "recharts";
+import { ListFilter, Plus, X } from "lucide-react";
+import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipProps } from "recharts";
 import { detectCategoricalFields, detectDateField, detectNumericFields, type DatasetRow } from "../../data/hf/rows";
-import type { SourceMetadata } from "../../types/source";
+import type { SourceMetadata, ValueColumn } from "../../types/source";
 
 interface Props {
   source: SourceMetadata;
@@ -10,11 +10,66 @@ interface Props {
 }
 
 const ALL = "__all__";
+const NO_GROUP = "__none__";
 const ROW_LEVEL_NON_FILTERS = ["location_id_native", "location_name", "as_of"];
+const TOP_N_DEFAULT = 8;
+
+// Distinct enough at small sizes; cycles for >8 groups.
+const SERIES_COLORS = [
+  "#ef4444", // red
+  "#3b82f6", // blue
+  "#10b981", // emerald
+  "#f59e0b", // amber
+  "#a855f7", // violet
+  "#ec4899", // pink
+  "#14b8a6", // teal
+  "#f97316"  // orange
+];
+
+const SINGLE_SERIES_KEY = "All";
 
 interface ActiveFilter {
   name: string;
   value: string;
+}
+
+type AggregationMethod = "sum" | "mean" | "max" | "min" | "count";
+
+function pickAggregation(meta: ValueColumn | undefined): AggregationMethod {
+  // Map the schema's `aggregation` field onto a function we know how to apply
+  // here. `rate` and `proportion` have no clean unweighted-average story so we
+  // also fall back to mean.
+  switch (meta?.aggregation) {
+    case "sum":
+    case "count":
+      return "sum";
+    case "max":
+      return "max";
+    case "mean":
+    case "rate":
+    case "proportion":
+      return "mean";
+    case "none":
+    default:
+      return "mean";
+  }
+}
+
+function aggregate(values: number[], method: AggregationMethod): number {
+  if (values.length === 0) return NaN;
+  switch (method) {
+    case "sum":
+      return values.reduce((a, b) => a + b, 0);
+    case "max":
+      return values.reduce((a, b) => (b > a ? b : a), -Infinity);
+    case "min":
+      return values.reduce((a, b) => (b < a ? b : a), Infinity);
+    case "count":
+      return values.length;
+    case "mean":
+    default:
+      return values.reduce((a, b) => a + b, 0) / values.length;
+  }
 }
 
 export function SourceTimelineChart({ source, rows }: Props) {
@@ -29,9 +84,8 @@ export function SourceTimelineChart({ source, rows }: Props) {
   );
   const numericFields = declaredNumeric.length > 0 ? declaredNumeric : detectedNumeric;
 
-  // Categorical filter axes — anything not numeric, not the date, not a row-level
-  // traceability column. SEPARATE from the metric (numeric Y-axis).
-  const filterFields = useMemo(
+  // Categorical columns — used for both filters and group-by candidates.
+  const categoricalFields = useMemo(
     () =>
       detectCategoricalFields(rows, [
         dateField ?? "",
@@ -47,41 +101,45 @@ export function SourceTimelineChart({ source, rows }: Props) {
     else if (metric !== null && !numericFields.includes(metric)) setMetric(numericFields[0] ?? null);
   }, [metric, numericFields]);
 
+  const [groupBy, setGroupBy] = useState<string>(NO_GROUP);
+  // Drop group-by if its column disappears.
+  useEffect(() => {
+    if (groupBy !== NO_GROUP && !categoricalFields.some((f) => f.name === groupBy)) {
+      setGroupBy(NO_GROUP);
+    }
+  }, [categoricalFields, groupBy]);
+
   const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
 
-  // First time filterFields arrive, surface a location_id filter if present —
-  // but leave it set to All so the chart shows everything by default.
   const initRef = useRef(false);
   useEffect(() => {
-    if (initRef.current || filterFields.length === 0) return;
+    if (initRef.current || categoricalFields.length === 0) return;
     initRef.current = true;
-    if (filterFields.some((f) => f.name === "location_id")) {
+    if (categoricalFields.some((f) => f.name === "location_id")) {
       setActiveFilters([{ name: "location_id", value: ALL }]);
     }
-  }, [filterFields]);
+  }, [categoricalFields]);
 
-  // Drop active filters whose underlying field is gone, and reset values that no
-  // longer exist.
   useEffect(() => {
     setActiveFilters((curr) => {
       const next = curr
-        .filter((f) => filterFields.some((ff) => ff.name === f.name))
+        .filter((f) => categoricalFields.some((ff) => ff.name === f.name))
         .map((f) => {
-          const field = filterFields.find((ff) => ff.name === f.name)!;
+          const field = categoricalFields.find((ff) => ff.name === f.name)!;
           if (f.value === ALL || field.values.includes(f.value)) return f;
           return { ...f, value: ALL };
         });
       return next.length === curr.length && next.every((f, i) => f.value === curr[i].value) ? curr : next;
     });
-  }, [filterFields]);
+  }, [categoricalFields]);
 
   const availableForAdd = useMemo(
-    () => filterFields.filter((f) => !activeFilters.some((af) => af.name === f.name)),
-    [filterFields, activeFilters]
+    () => categoricalFields.filter((f) => !activeFilters.some((af) => af.name === f.name)),
+    [categoricalFields, activeFilters]
   );
 
   const addFilter = (name: string) => {
-    if (!filterFields.some((f) => f.name === name)) return;
+    if (!categoricalFields.some((f) => f.name === name)) return;
     setActiveFilters((curr) => (curr.some((f) => f.name === name) ? curr : [...curr, { name, value: ALL }]));
   };
   const removeFilter = (name: string) =>
@@ -89,7 +147,6 @@ export function SourceTimelineChart({ source, rows }: Props) {
   const setFilterValue = (name: string, value: string) =>
     setActiveFilters((curr) => curr.map((f) => (f.name === name ? { ...f, value } : f)));
 
-  // Add-filter popover.
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -108,36 +165,159 @@ export function SourceTimelineChart({ source, rows }: Props) {
     };
   }, [menuOpen]);
 
-  const chartData = useMemo(() => {
-    if (!dateField || !metric) return [];
-    return rows
-      .filter((row) => {
-        for (const f of activeFilters) {
-          if (f.value === ALL) continue;
-          if (String(row[f.name] ?? "") !== f.value) return false;
-        }
-        return true;
-      })
-      .map((row) => {
-        const rawDate = row[dateField];
-        const date = typeof rawDate === "string" ? rawDate.slice(0, 10) : String(rawDate ?? "");
-        const rawValue = row[metric];
-        const value = typeof rawValue === "number" ? rawValue : Number(rawValue);
-        return { date, value: Number.isFinite(value) ? value : null, _row: row };
-      })
-      .filter((d) => d.date && d.value !== null)
-      .sort((a, b) => a.date.localeCompare(b.date));
-  }, [rows, dateField, metric, activeFilters]);
-
   const valueColumnMeta = source.value_columns.find((c) => c.name === metric);
+  const aggMethod = pickAggregation(valueColumnMeta);
+
+  // Aggregate matching rows by (groupKey, date) using the column's declared
+  // aggregation — single line by default, multiple lines when groupBy is set.
+  const { chartData, groupKeys, colorByGroup, groupTotals } = useMemo(() => {
+    if (!dateField || !metric)
+      return {
+        chartData: [],
+        groupKeys: [] as string[],
+        colorByGroup: {} as Record<string, string>,
+        groupTotals: new Map<string, number>()
+      };
+
+    const buckets = new Map<string, Map<string, number[]>>(); // groupKey → date → values
+    const allDates = new Set<string>();
+    for (const row of rows) {
+      let passes = true;
+      for (const f of activeFilters) {
+        if (f.value === ALL) continue;
+        if (String(row[f.name] ?? "") !== f.value) {
+          passes = false;
+          break;
+        }
+      }
+      if (!passes) continue;
+
+      const dateRaw = row[dateField];
+      const date = typeof dateRaw === "string" ? dateRaw.slice(0, 10) : String(dateRaw ?? "");
+      if (!date) continue;
+      const valueRaw = row[metric];
+      const value = typeof valueRaw === "number" ? valueRaw : Number(valueRaw);
+      if (!Number.isFinite(value)) continue;
+
+      const groupKey = groupBy === NO_GROUP ? SINGLE_SERIES_KEY : String(row[groupBy] ?? "(unknown)");
+
+      let g = buckets.get(groupKey);
+      if (!g) {
+        g = new Map();
+        buckets.set(groupKey, g);
+      }
+      let arr = g.get(date);
+      if (!arr) {
+        arr = [];
+        g.set(date, arr);
+      }
+      arr.push(value);
+      allDates.add(date);
+    }
+
+    const groupKeys = Array.from(buckets.keys()).sort();
+    const sortedDates = Array.from(allDates).sort();
+
+    // Aggregate per (group, date) and accumulate per-group totals for ranking.
+    const groupTotals = new Map<string, number>();
+    const chartData = sortedDates.map((date) => {
+      const out: Record<string, string | number | null> = { date };
+      for (const groupKey of groupKeys) {
+        const values = buckets.get(groupKey)?.get(date);
+        if (values && values.length > 0) {
+          const v = aggregate(values, aggMethod);
+          out[groupKey] = v;
+          if (Number.isFinite(v)) groupTotals.set(groupKey, (groupTotals.get(groupKey) ?? 0) + (v as number));
+        } else {
+          out[groupKey] = null;
+        }
+      }
+      return out;
+    });
+
+    // Colors keyed by name so a series stays the same color regardless of
+    // which siblings are currently visible.
+    const colorByGroup: Record<string, string> = {};
+    if (groupKeys.length === 1 && groupKeys[0] === SINGLE_SERIES_KEY) {
+      colorByGroup[SINGLE_SERIES_KEY] = SERIES_COLORS[0];
+    } else {
+      for (let i = 0; i < groupKeys.length; i++) {
+        colorByGroup[groupKeys[i]] = SERIES_COLORS[i % SERIES_COLORS.length];
+      }
+    }
+    return { chartData, groupKeys, colorByGroup, groupTotals };
+  }, [rows, dateField, metric, activeFilters, groupBy, aggMethod]);
+
+  // Visible-series state. When the group-by axis changes, default to the top
+  // TOP_N_DEFAULT groups by total value so we don't drown the chart in lines.
+  // null = "show all" (used when groupKeys.length <= TOP_N_DEFAULT).
+  const [visibleGroupKeys, setVisibleGroupKeys] = useState<Set<string> | null>(null);
+  const groupKeysSig = groupKeys.join("|");
+  useEffect(() => {
+    if (groupKeys.length === 0) {
+      setVisibleGroupKeys(null);
+      return;
+    }
+    if (groupKeys.length <= TOP_N_DEFAULT) {
+      setVisibleGroupKeys(null);
+      return;
+    }
+    const ranked = [...groupKeys].sort((a, b) => (groupTotals.get(b) ?? 0) - (groupTotals.get(a) ?? 0));
+    setVisibleGroupKeys(new Set(ranked.slice(0, TOP_N_DEFAULT)));
+    // Reset only when the set of group keys actually changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupKeysSig]);
+
+  const renderedGroupKeys = useMemo(() => {
+    if (!visibleGroupKeys) return groupKeys;
+    return groupKeys.filter((k) => visibleGroupKeys.has(k));
+  }, [groupKeys, visibleGroupKeys]);
+
+  const toggleGroupVisible = (key: string) => {
+    setVisibleGroupKeys((curr) => {
+      const base = curr ?? new Set(groupKeys);
+      const next = new Set(base);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const resetToTopN = () => {
+    const ranked = [...groupKeys].sort((a, b) => (groupTotals.get(b) ?? 0) - (groupTotals.get(a) ?? 0));
+    setVisibleGroupKeys(new Set(ranked.slice(0, TOP_N_DEFAULT)));
+  };
+
+  // Series picker popover.
+  const [seriesMenuOpen, setSeriesMenuOpen] = useState(false);
+  const seriesMenuRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!seriesMenuOpen) return;
+    const onMouseDown = (e: MouseEvent) => {
+      if (seriesMenuRef.current && !seriesMenuRef.current.contains(e.target as Node)) setSeriesMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSeriesMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [seriesMenuOpen]);
 
   if (!dateField) return <Empty body="No date column detected on this dataset." />;
   if (numericFields.length === 0) return <Empty body="No numeric metrics declared or detected." />;
 
+  const showLegend = groupBy !== NO_GROUP && renderedGroupKeys.length > 1;
+  const aggLabel = aggregationLabel(aggMethod, valueColumnMeta?.aggregation);
+  const seriesPickerActive = groupBy !== NO_GROUP && groupKeys.length > TOP_N_DEFAULT;
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-start gap-3 text-xs">
-        {/* Metric box: Y-axis selector with unit/type on one line below */}
+        {/* Metric */}
         <div className="flex min-w-[160px] flex-col gap-1 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2">
           <span className="text-[10px] font-semibold uppercase text-neutral-400">Metric (Y axis)</span>
           <select
@@ -151,24 +331,79 @@ export function SourceTimelineChart({ source, rows }: Props) {
               </option>
             ))}
           </select>
-          {(valueColumnMeta?.unit || valueColumnMeta?.value_type) && (
-            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-neutral-400">
-              {valueColumnMeta.unit && (
-                <span>
-                  unit: <span className="text-neutral-200">{valueColumnMeta.unit}</span>
-                </span>
-              )}
-              {valueColumnMeta.value_type && (
-                <span>
-                  type: <span className="text-neutral-200">{valueColumnMeta.value_type}</span>
-                </span>
-              )}
-            </div>
-          )}
+          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-neutral-400">
+            {valueColumnMeta?.unit && (
+              <span>
+                unit: <span className="text-neutral-200">{valueColumnMeta.unit}</span>
+              </span>
+            )}
+            {valueColumnMeta?.value_type && (
+              <span>
+                type: <span className="text-neutral-200">{valueColumnMeta.value_type}</span>
+              </span>
+            )}
+            <span>
+              agg: <span className="text-neutral-200">{aggLabel}</span>
+            </span>
+          </div>
         </div>
 
-        {/* Filters box: + on the left, active filters spread to the right */}
-        {(filterFields.length > 0 || activeFilters.length > 0) && (
+        {/* Group by */}
+        {categoricalFields.length > 0 && (
+          <div className="flex min-w-[160px] flex-col gap-1 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2">
+            <span className="text-[10px] font-semibold uppercase text-neutral-400">Group by</span>
+            <select
+              value={groupBy}
+              onChange={(e) => setGroupBy(e.target.value)}
+              className="rounded-md border border-white/10 bg-black/60 px-2 py-1 text-white"
+            >
+              <option value={NO_GROUP}>None</option>
+              {categoricalFields.map((f) => (
+                <option key={f.name} value={f.name}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+            {groupBy !== NO_GROUP && (
+              <div className="flex items-center justify-between gap-2 text-[10px] text-neutral-400">
+                <span>
+                  {seriesPickerActive
+                    ? `${renderedGroupKeys.length} of ${groupKeys.length} series`
+                    : `${groupKeys.length} ${groupKeys.length === 1 ? "series" : "series"}`}
+                </span>
+                {seriesPickerActive && (
+                  <div className="relative" ref={seriesMenuRef}>
+                    <button
+                      type="button"
+                      onClick={() => setSeriesMenuOpen((o) => !o)}
+                      title="Pick which series to show"
+                      aria-label="Pick series"
+                      aria-haspopup="menu"
+                      aria-expanded={seriesMenuOpen}
+                      className="flex items-center gap-1 rounded border border-white/10 px-1.5 py-0.5 text-neutral-200 hover:border-red-500 hover:text-red-200"
+                    >
+                      <ListFilter className="h-3 w-3" />
+                      Pick
+                    </button>
+                    {seriesMenuOpen && (
+                      <SeriesPicker
+                        groupKeys={groupKeys}
+                        groupTotals={groupTotals}
+                        visibleSet={visibleGroupKeys ?? new Set(groupKeys)}
+                        colorByGroup={colorByGroup}
+                        onToggle={toggleGroupVisible}
+                        onResetTopN={resetToTopN}
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Filters */}
+        {(categoricalFields.length > 0 || activeFilters.length > 0) && (
           <div className="flex flex-col gap-1 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2">
             <span className="text-[10px] font-semibold uppercase text-neutral-400">Filters</span>
             <div className="flex flex-wrap items-end gap-2">
@@ -211,7 +446,7 @@ export function SourceTimelineChart({ source, rows }: Props) {
               </div>
 
               {activeFilters.map((filter) => {
-                const field = filterFields.find((f) => f.name === filter.name);
+                const field = categoricalFields.find((f) => f.name === filter.name);
                 if (!field) return null;
                 return (
                   <div key={filter.name} className="flex min-w-[120px] flex-col gap-0.5">
@@ -251,17 +486,44 @@ export function SourceTimelineChart({ source, rows }: Props) {
         )}
       </div>
 
-      {chartData.length === 0 ? (
-        <Empty body="No rows match the current filters." />
+      {chartData.length === 0 || renderedGroupKeys.length === 0 ? (
+        <Empty
+          body={
+            chartData.length === 0
+              ? "No rows match the current filters."
+              : "No series visible — pick at least one in the Group by panel."
+          }
+        />
       ) : (
-        <div className="h-[360px] rounded-lg border border-white/10 bg-white p-3">
+        <div className="h-[400px] rounded-lg border border-white/10 bg-neutral-950 p-3">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} margin={{ top: 12, right: 18, bottom: 8, left: 0 }}>
-              <CartesianGrid stroke="#e5e5e5" vertical={false} />
-              <XAxis dataKey="date" tick={{ fill: "#525252", fontSize: 12 }} minTickGap={28} stroke="#d4d4d4" />
-              <YAxis tick={{ fill: "#525252", fontSize: 12 }} stroke="#d4d4d4" />
-              <Tooltip content={<HoverCard metric={metric ?? ""} dateField={dateField} />} />
-              <Line type="monotone" dataKey="value" stroke="#b91c1c" strokeWidth={2.4} dot={false} activeDot={{ r: 4 }} />
+              <CartesianGrid stroke="#262626" vertical={false} />
+              <XAxis dataKey="date" tick={{ fill: "#a3a3a3", fontSize: 12 }} minTickGap={28} stroke="#404040" />
+              <YAxis tick={{ fill: "#a3a3a3", fontSize: 12 }} stroke="#404040" />
+              <Tooltip
+                content={<HoverCard groupKeys={renderedGroupKeys} colorByGroup={colorByGroup} />}
+                cursor={{ stroke: "#525252", strokeWidth: 1 }}
+              />
+              {showLegend && (
+                <Legend
+                  wrapperStyle={{ fontSize: 11, color: "#d4d4d8", paddingTop: 6 }}
+                  iconType="plainline"
+                />
+              )}
+              {renderedGroupKeys.map((g) => (
+                <Line
+                  key={g}
+                  type="monotone"
+                  dataKey={g}
+                  stroke={colorByGroup[g]}
+                  strokeWidth={2.2}
+                  dot={false}
+                  activeDot={{ r: 4 }}
+                  connectNulls={false}
+                  isAnimationActive={false}
+                />
+              ))}
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -270,34 +532,122 @@ export function SourceTimelineChart({ source, rows }: Props) {
   );
 }
 
-function HoverCard({
-  metric,
-  dateField,
-  active,
-  payload
-}: TooltipProps<number, string> & { metric: string; dateField: string }) {
-  if (!active || !payload?.length) return null;
-  const point = payload[0]?.payload as { _row?: DatasetRow } | undefined;
-  const row = point?._row ?? {};
-  const entries = Object.entries(row).filter(([k]) => k !== dateField && k !== metric);
+function aggregationLabel(method: AggregationMethod, declared: ValueColumn["aggregation"] | undefined): string {
+  if (declared && declared !== "none") return declared;
+  return method === "sum" ? "sum" : "mean";
+}
+
+interface SeriesPickerProps {
+  groupKeys: string[];
+  groupTotals: Map<string, number>;
+  visibleSet: Set<string>;
+  colorByGroup: Record<string, string>;
+  onToggle: (key: string) => void;
+  onResetTopN: () => void;
+}
+
+function SeriesPicker({ groupKeys, groupTotals, visibleSet, colorByGroup, onToggle, onResetTopN }: SeriesPickerProps) {
+  const ranked = [...groupKeys].sort((a, b) => (groupTotals.get(b) ?? 0) - (groupTotals.get(a) ?? 0));
+  const [query, setQuery] = useState("");
+  const filtered = query
+    ? ranked.filter((k) => k.toLowerCase().includes(query.toLowerCase()))
+    : ranked;
+
   return (
-    <div className="rounded-md border border-neutral-300 bg-white p-3 text-xs text-neutral-800 shadow">
-      <p className="font-mono text-[10px] text-neutral-500">{String((row as Record<string, unknown>)[dateField] ?? "")}</p>
-      <p className="mt-1 text-sm font-semibold">
-        {metric}: {String((row as Record<string, unknown>)[metric] ?? "")}
-      </p>
-      {entries.length > 0 && (
-        <dl className="mt-2 grid max-w-xs grid-cols-[auto_1fr] gap-x-2 gap-y-0.5">
-          {entries.slice(0, 8).flatMap(([k, v]) => [
-            <dt key={`${k}-k`} className="font-mono text-[10px] text-neutral-500">
-              {k}
-            </dt>,
-            <dd key={`${k}-v`} className="truncate text-neutral-700">
-              {v === null || v === undefined ? "—" : String(v)}
-            </dd>
-          ])}
-        </dl>
-      )}
+    <div
+      role="menu"
+      className="absolute right-0 top-full z-30 mt-1 w-[260px] rounded-md border border-white/10 bg-black/95 p-2 shadow-lg backdrop-blur"
+    >
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-semibold uppercase text-neutral-400">Pick series</p>
+        <button
+          type="button"
+          onClick={onResetTopN}
+          className="text-[10px] text-neutral-400 hover:text-red-200"
+        >
+          Reset to top {TOP_N_DEFAULT}
+        </button>
+      </div>
+      <input
+        type="search"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search…"
+        className="mt-2 w-full rounded border border-white/10 bg-black/60 px-2 py-1 text-xs text-white placeholder:text-neutral-500 focus:border-red-500 focus:outline-none"
+      />
+      <ul className="mt-2 max-h-[260px] space-y-0.5 overflow-y-auto pr-1">
+        {filtered.map((g) => {
+          const total = groupTotals.get(g) ?? 0;
+          const checked = visibleSet.has(g);
+          return (
+            <li key={g}>
+              <label
+                className={`flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs transition ${
+                  checked ? "text-white" : "text-neutral-300 hover:bg-white/5"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => onToggle(g)}
+                  className="accent-red-500"
+                />
+                <span
+                  aria-hidden="true"
+                  className="inline-block h-2 w-2 shrink-0 rounded-sm"
+                  style={{ background: colorByGroup[g] ?? "#ef4444", opacity: checked ? 1 : 0.4 }}
+                />
+                <span className="flex-1 truncate" title={g}>
+                  {g}
+                </span>
+                <span className="ml-auto shrink-0 font-mono text-[10px] text-neutral-500">
+                  {Number.isFinite(total) ? total.toLocaleString(undefined, { maximumFractionDigits: 0 }) : "—"}
+                </span>
+              </label>
+            </li>
+          );
+        })}
+        {filtered.length === 0 && (
+          <li className="px-2 py-1 text-xs text-neutral-500">No matches.</li>
+        )}
+      </ul>
+    </div>
+  );
+}
+
+function HoverCard({
+  groupKeys,
+  colorByGroup,
+  active,
+  payload,
+  label
+}: TooltipProps<number, string> & { groupKeys: string[]; colorByGroup: Record<string, string> }) {
+  if (!active || !payload?.length) return null;
+  const sorted = [...payload].sort((a, b) => Number(b.value ?? 0) - Number(a.value ?? 0));
+  const showSeriesName = groupKeys.length > 1 || (groupKeys[0] && groupKeys[0] !== "All");
+  return (
+    <div className="rounded-md border border-white/10 bg-black/95 p-3 text-xs text-neutral-100 shadow-lg backdrop-blur">
+      <p className="font-mono text-[10px] text-neutral-400">{String(label ?? "")}</p>
+      <ul className="mt-1 space-y-0.5">
+        {sorted.map((p) => {
+          const key = String(p.dataKey);
+          const value = p.value;
+          if (value === null || value === undefined) return null;
+          return (
+            <li key={key} className="flex items-center gap-2">
+              <span
+                aria-hidden="true"
+                className="inline-block h-2 w-2 rounded-sm"
+                style={{ background: colorByGroup[key] ?? "#ef4444" }}
+              />
+              {showSeriesName && <span className="text-neutral-200">{key}:</span>}
+              <span className="font-mono text-neutral-100">
+                {typeof value === "number" ? value.toLocaleString() : String(value)}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

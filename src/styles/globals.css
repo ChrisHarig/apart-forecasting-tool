@@ -66,3 +66,89 @@ textarea:focus-visible {
 ::-webkit-scrollbar-thumb:hover {
   background: #52525b;
 }
+
+/* Dual-handle range slider. Two of these overlay the same bar; the inputs
+   themselves are click-through (pointer-events: none on the runnable track)
+   so they don't block the underlying decorations, but the thumbs are
+   pickable. */
+.dual-range-input {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  pointer-events: none;
+  height: 14px;
+}
+.dual-range-input::-webkit-slider-runnable-track {
+  background: transparent;
+  height: 14px;
+  border: 0;
+}
+.dual-range-input::-moz-range-track {
+  background: transparent;
+  height: 14px;
+  border: 0;
+}
+.dual-range-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: auto;
+  height: 14px;
+  width: 14px;
+  border-radius: 50%;
+  background: #fafafa;
+  border: 2px solid #ef4444;
+  cursor: pointer;
+  margin-top: 0;
+  position: relative;
+  z-index: 2;
+}
+.dual-range-input::-moz-range-thumb {
+  pointer-events: auto;
+  height: 14px;
+  width: 14px;
+  border-radius: 50%;
+  background: #fafafa;
+  border: 2px solid #ef4444;
+  cursor: pointer;
+}
+
+/* Playhead inside the trimmed window. Visually a thin solid bar so it reads
+   as a different control from the round trim handles. The input occupies
+   only the active band (positioned by the parent) — its track is fully
+   interactive so clicking anywhere in the band moves the playhead. */
+.playhead-range {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  height: 100%;
+  cursor: pointer;
+}
+.playhead-range::-webkit-slider-runnable-track {
+  background: transparent;
+  height: 100%;
+  border: 0;
+}
+.playhead-range::-moz-range-track {
+  background: transparent;
+  height: 100%;
+  border: 0;
+}
+.playhead-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 22px;
+  width: 4px;
+  border-radius: 1px;
+  background: #ef4444;
+  cursor: pointer;
+  margin-top: 0;
+  border: 0;
+}
+.playhead-range::-moz-range-thumb {
+  height: 22px;
+  width: 4px;
+  border-radius: 1px;
+  background: #ef4444;
+  cursor: pointer;
+  border: 0;
+}

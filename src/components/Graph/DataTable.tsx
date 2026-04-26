@@ -13,7 +13,7 @@ interface SortState {
   direction: SortDir;
 }
 
-export function DataTable({ rows, initialPageSize = 25 }: Props) {
+export function DataTable({ rows, initialPageSize = 100 }: Props) {
   const [pageSize, setPageSize] = useState(initialPageSize);
   const [sort, setSort] = useState<SortState>({ column: null, direction: "asc" });
 
@@ -78,21 +78,21 @@ export function DataTable({ rows, initialPageSize = 25 }: Props) {
 
   return (
     <div className="space-y-2">
-      <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white text-black">
+      <div className="overflow-hidden rounded-lg border border-white/10 bg-neutral-950 text-neutral-100">
         <div className="max-h-[420px] overflow-auto">
           <table className="w-full min-w-max text-left text-xs">
-            <thead className="sticky top-0 bg-neutral-100 text-[10px] uppercase text-neutral-600">
+            <thead className="sticky top-0 bg-white/[0.04] text-[10px] uppercase text-neutral-400 backdrop-blur">
               <tr>
                 {columns.map((c) => {
                   const active = sort.column === c;
                   const Icon = !active ? ArrowUpDown : sort.direction === "asc" ? ArrowUp : ArrowDown;
                   return (
-                    <th key={c} className="px-3 py-2 font-semibold">
+                    <th key={c} className="border-b border-white/10 px-3 py-2 font-semibold">
                       <button
                         type="button"
                         onClick={() => onHeaderClick(c)}
-                        className={`flex items-center gap-1 whitespace-nowrap text-left hover:text-black ${
-                          active ? "text-black" : "text-neutral-600"
+                        className={`flex items-center gap-1 whitespace-nowrap text-left transition hover:text-white ${
+                          active ? "text-white" : "text-neutral-400"
                         }`}
                       >
                         <span>{c}</span>
@@ -106,11 +106,11 @@ export function DataTable({ rows, initialPageSize = 25 }: Props) {
                 })}
               </tr>
             </thead>
-            <tbody className="divide-y divide-neutral-200">
+            <tbody className="divide-y divide-white/[0.06]">
               {visible.map((row, i) => (
-                <tr key={i} className="hover:bg-neutral-50">
+                <tr key={i} className="hover:bg-white/[0.03]">
                   {columns.map((c) => (
-                    <td key={c} className="whitespace-nowrap px-3 py-1.5">
+                    <td key={c} className="whitespace-nowrap px-3 py-1.5 text-neutral-200">
                       {formatCell(row[c])}
                     </td>
                   ))}
