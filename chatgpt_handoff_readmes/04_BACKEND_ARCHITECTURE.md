@@ -12,7 +12,11 @@ Sentinel Atlas is organized around uneven country data availability. The backend
 - Uploaded aggregate data is normalized into a canonical observation table.
 - Readiness services compute transparent heuristic scores.
 - Model eligibility selects only supported models and returns `insufficient_data` by default.
-- Forecast benchmark services compare built-in baselines, optional whitelisted StatsForecast AutoETS, or uploaded prediction CSVs against stored aggregate holdout observations; they do not execute uploaded model code.
+- Forecast benchmark services now create reproducible benchmark dataset snapshots before scoring. Built-in baselines, optional whitelisted StatsForecast AutoETS, and uploaded prediction CSV sets are evaluated against the same stored aggregate train/test split, holdout dates, observed values, and scoring rules. Uploaded model support remains prediction CSV only; the backend does not execute uploaded model code.
+- Forecast challenge snapshots support Sprint A retrospective holdouts and prospective challenges. Retrospective snapshots freeze historical train/holdout windows; prospective snapshots freeze the train window at a cutoff and generate future target dates without fabricating truth values.
+- Sprint B stores successful built-in challenge forecasts as canonical `PredictionSet` / `PredictionPoint` rows. Built-ins use the challenge snapshot's frozen train rows and exact target dates, persist as `prediction_source: built_in` / `submission_track: internal_baseline`, and return per-model `complete`, `insufficient_data`, `model_unavailable`, or `failed` statuses without failing the full challenge run.
+- Sprint C adds challenge-tied user prediction CSV upload, persisted `ForecastScore` records, scoring for retrospective and prospective challenges when aggregate truth exists, leaderboard ranking by SMAPE/RMSE/MAE, and dynamic observed-vs-predicted comparison points. Unit or metric mismatches can be stored as overlay-only data when allowed, but overlay-only predictions are not scored or ranked.
+- Sprint D adds lightweight hackathon submitter metadata, public/verified/internal submission tracks, review decisions, privacy-preserving submitter list responses, and leaderboard filters by track, review status, and unreviewed inclusion. This is metadata labeling only and does not add authentication or executable model uploads.
 
 ## Upgrade Path
 
@@ -24,6 +28,8 @@ Sentinel Atlas is organized around uneven country data availability. The backend
 6. Promote data quality scoring rules into versioned policies.
 7. Add authenticated model/prediction ownership, benchmark access controls, and stricter production model registry governance.
 8. Decide whether optional `statsforecast` should remain an extra or become part of the production backend image.
+9. Add a blind benchmark workflow if the product needs stronger guarantees that external models did not train on holdout values.
+10. Add a challenge lifecycle job to rescore prospective challenges automatically when new aggregate truth observations arrive.
 
 ## Safety Boundary
 
