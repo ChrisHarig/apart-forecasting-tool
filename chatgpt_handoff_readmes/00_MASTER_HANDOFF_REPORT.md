@@ -38,7 +38,7 @@ I also inspected current project files needed to verify the handoff against code
 
 - Opens to the `world` view by default.
 - Uses `MapLibre GL JS` as the primary map implementation.
-- Uses `world-atlas` country boundaries as a clickable GeoJSON overlay.
+- Uses `world-atlas` country geometry as a clickable GeoJSON overlay.
 - Uses ISO numeric to ISO3 conversion for stable country joins.
 - Defaults selected country to United States / `USA`.
 - Supports country click selection without changing the current view.
@@ -46,6 +46,7 @@ I also inspected current project files needed to verify the handoff against code
 - Triggers placeholder country-news loading on selected or hovered country.
 - Supports zoom, pan, MapLibre navigation controls, and a `Reset view` button.
 - Uses red only as selected-country styling, not risk shading.
+- Avoids persistent frontend country-line overlays in the normal basemap path and unwraps country geometry at the antimeridian to prevent high-latitude wraparound artifacts; fallback mode keeps only a subtle boundary line.
 - Has local fallback style support for restricted/offline map style loading.
 
 Key files:
@@ -223,7 +224,7 @@ Key files:
 
 - Initializes MapLibre with `mapConfig.styleUrl`.
 - Adds navigation control.
-- Installs country fill, hover-line, selected-fill, and selected-line layers.
+- Installs country fill and selected-fill layers in the normal basemap path; fallback mode adds a subtle country boundary line for local/offline readability.
 - Attaches mousemove, mouseleave, and click handlers to `sentinel-country-fill`.
 - Updates selected-country filter when `selectedCountry.iso3` changes.
 - Updates GeoJSON source when coverage counts change.
@@ -720,4 +721,3 @@ Use this report plus `06_NEXT_CODEX_PROMPT_TASKS.md` to generate standalone Code
 - Keep country selection on the map, not a dropdown.
 - Include exact acceptance criteria.
 - Include commands to run and expected reporting format.
-

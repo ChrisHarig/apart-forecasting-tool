@@ -51,11 +51,12 @@ Map behavior:
 - Uses OpenFreeMap as the default OpenStreetMap-based vector tile style.
 - Supports `VITE_MAP_STYLE_URL` to override the style URL.
 - Supports scroll-wheel zoom, drag pan, zoom buttons, and reset view.
-- Overlays world-atlas country boundaries as a clickable GeoJSON layer.
+- Overlays world-atlas country geometry as a clickable GeoJSON layer.
 - Converts country selection to ISO3 for state and source joins.
 - Does not rely on fragile country-name matching.
 - Highlights the selected country in red. Red means selected country, not risk.
 - Clicking a country selects it in place and does not change the current view.
+- Does not draw persistent frontend country-line overlays on top of the basemap; the selected state is a red fill. Country geometry is unwrapped at the antimeridian to avoid high-latitude wraparound artifacts around countries such as Russia. A subtle boundary line is used only by the local fallback map style.
 
 Default style:
 

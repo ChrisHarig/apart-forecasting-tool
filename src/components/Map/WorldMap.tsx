@@ -47,6 +47,7 @@ export function WorldMap({ selectedCountry, coverageCounts, onCountrySelect, onC
       zoom: mapConfig.initialZoom,
       minZoom: mapConfig.minZoom,
       maxZoom: mapConfig.maxZoom,
+      renderWorldCopies: false,
       attributionControl: { compact: true }
     });
 
@@ -116,15 +117,17 @@ export function WorldMap({ selectedCountry, coverageCounts, onCountrySelect, onC
         }
       });
 
-      map.addLayer({
-        id: "sentinel-country-hover-line",
-        type: "line",
-        source: "sentinel-countries",
-        paint: {
-          "line-color": "rgba(255,255,255,0.36)",
-          "line-width": 0.85
-        }
-      });
+      if (fallbackApplied) {
+        map.addLayer({
+          id: "sentinel-fallback-country-line",
+          type: "line",
+          source: "sentinel-countries",
+          paint: {
+            "line-color": "rgba(255,255,255,0.20)",
+            "line-width": 0.45
+          }
+        });
+      }
 
       map.addLayer({
         id: "sentinel-selected-country-fill",
@@ -132,19 +135,8 @@ export function WorldMap({ selectedCountry, coverageCounts, onCountrySelect, onC
         source: "sentinel-countries",
         filter: selectedFilter(selectedCountry?.iso3 ?? null),
         paint: {
-          "fill-color": "rgba(220,38,38,0.30)",
+          "fill-color": "rgba(220,38,38,0.42)",
           "fill-outline-color": "rgba(220,38,38,0)"
-        }
-      });
-
-      map.addLayer({
-        id: "sentinel-selected-country-line",
-        type: "line",
-        source: "sentinel-countries",
-        filter: selectedFilter(selectedCountry?.iso3 ?? null),
-        paint: {
-          "line-color": "#dc2626",
-          "line-width": 2.4
         }
       });
 
@@ -177,7 +169,6 @@ export function WorldMap({ selectedCountry, coverageCounts, onCountrySelect, onC
   useEffect(() => {
     if (!mapRef.current || !mapReady) return;
     mapRef.current.setFilter("sentinel-selected-country-fill", selectedFilter(selectedCountry?.iso3 ?? null));
-    mapRef.current.setFilter("sentinel-selected-country-line", selectedFilter(selectedCountry?.iso3 ?? null));
   }, [selectedCountry?.iso3, mapReady]);
 
   const resetMap = () => {

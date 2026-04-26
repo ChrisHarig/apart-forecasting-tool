@@ -236,7 +236,7 @@ Override the style URL with:
 VITE_MAP_STYLE_URL=<style-url>
 ```
 
-The map also installs a local fallback style if the external basemap cannot load in a restricted environment. Country boundaries still render through the local world-atlas overlay, so the app remains usable even when remote map tiles fail.
+The map also installs a local fallback style if the external basemap cannot load in a restricted environment. Country geometry still renders through the local world-atlas overlay, so the app remains usable even when remote map tiles fail. In the normal basemap path, do not draw persistent frontend country-line overlays on top of the basemap; those line layers can create visual clutter. Country geometry is unwrapped at the antimeridian in `countrySelectionLayer.ts` so selected countries such as Russia do not render high-latitude wraparound bands. Keep the selected country as a restrained red fill. A subtle boundary line belongs only to the fallback style path.
 
 Country selection is based on ISO3, not country-name matching. `countrySelectionLayer.ts` converts `world-atlas/countries-50m.json` TopoJSON into a GeoJSON layer and maps numeric country IDs to ISO3 via `src/utils/countryCodes.ts`.
 
@@ -248,7 +248,7 @@ Map behavior:
 - Reset view.
 - Country hover.
 - Country click selection.
-- Selected-country red fill and outline.
+- Selected-country red fill.
 - No permanent instructional, hover, selected-country, or basemap-warning cards over the map.
 
 Red on the map means selected country only. It is not disease risk, outbreak risk, or forecast output. Source-coverage context may be used as restrained neutral styling, but it should not overpower the selected-country red state.

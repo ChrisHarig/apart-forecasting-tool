@@ -9,6 +9,7 @@ Partial pass against the target product. The repo now closely matches the countr
 - Static review of README, package config, `src/`, tests, deployment workflow, and `backend/`.
 - Frontend tests.
 - Frontend production build.
+- Map layer and country-geometry regression coverage for avoiding persistent country-line overlays and antimeridian wraparound artifacts.
 - Backend pytest suite.
 - Preview server response and built asset loading.
 - Bundle text checks for required UI strings and removed simulator labels.
@@ -42,6 +43,18 @@ Result: passed. 7 test files, 21 tests.
 Result: passed. Vite still warns that the main JS chunk is larger than 500 kB.
 
 ```powershell
+$nodeDir = 'C:\Users\ASUS\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin'; $env:PATH = "$nodeDir;$env:PATH"; & (Join-Path $nodeDir 'node.exe') 'C:\Users\ASUS\Desktop\Vidur\CriticalOps\.codex-tools\npm\bin\npm-cli.js' test
+```
+
+Result: passed on 2026-04-26. 10 test files, 39 tests. Includes `WorldMap` layer checks and country antimeridian unwrapping regression coverage.
+
+```powershell
+$nodeDir = 'C:\Users\ASUS\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin'; $env:PATH = "$nodeDir;$env:PATH"; & (Join-Path $nodeDir 'node.exe') 'C:\Users\ASUS\Desktop\Vidur\CriticalOps\.codex-tools\npm\bin\npm-cli.js' run build
+```
+
+Result: passed on 2026-04-26. Vite still warns that the main JS chunk is larger than 500 kB.
+
+```powershell
 & 'C:\Users\ASUS\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' -m pytest
 ```
 
@@ -62,6 +75,7 @@ Result: preview server responded `200`.
 - Frontend upload normalizer did not reject PII-like fields. Fixed.
 - README said "No backend" even though a backend scaffold exists. Fixed.
 - Source metadata exposed raw callsign/MMSI-style fields as likely fields. Replaced with aggregate field names.
+- World map rendered persistent frontend country-line overlays and selected Russia could show high-latitude wraparound bands. Fixed by removing normal-mode country outline and selected outline layers, keeping selected-country styling as red fill only, unwrapping country geometry at the antimeridian, and retaining a subtle boundary line only for fallback map mode.
 
 ## Files Changed In Verification Pass
 
