@@ -15,6 +15,9 @@ class ForecastModelRead(APIModel):
     implementation_source: str | None = None
     benchmark_only: bool = True
     builtin: bool = False
+    experimental: bool = False
+    enabled_by_default: bool = True
+    feature_flag_enabled: bool = True
     accepts_uploaded_code: bool = False
     accepts_prediction_csv: bool = False
     required_observation_count: int | None = None

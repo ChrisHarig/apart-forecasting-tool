@@ -19,15 +19,18 @@ from app.services.forecast_benchmark import (
     BENCHMARK_LIMITATIONS,
     FAIRNESS_WARNING,
     BUILTIN_MODELS,
+    EXPERIMENTAL_TABPFN_TS_MODEL_ID,
     _dependency_status,
     _forecast_arima,
     _forecast_autoets,
     _forecast_sarima,
     _legacy_season_length,
     default_builtin_model_ids,
+    is_experimental_tabpfn_enabled,
     normalize_prediction_upload_row,
     parse_prediction_csv,
 )
+from app.services.experimental_tabpfn_ts import forecast_with_tabpfn_ts
 from app.services.normalization import NormalizationError, coerce_date
 from app.services.submissions import normalize_submitter_metadata, redact_private_submitter_fields
 
@@ -347,6 +350,42 @@ def run_single_builtin_model(
                 ],
                 limitations=limitations,
             )
+    elif model_id == EXPERIMENTAL_TABPFN_TS_MODEL_ID:
+        if not is_experimental_tabpfn_enabled():
+            return BuiltinPrediction(
+                model_id=model_id,
+                status="experimental_disabled",
+                values=[],
+                warnings=[
+                    *base_warnings,
+                    {
+                        "code": "experimental_disabled",
+                        "message": (
+                            "Experimental TabPFN-Time-Series is disabled. Set "
+                            "SENTINEL_ENABLE_EXPERIMENTAL_TABPFN=true to request this benchmark explicitly."
+                        ),
+                        "severity": "warning",
+                    },
+                ],
+                limitations=limitations,
+            )
+        dependency_status = _dependency_status(model)
+        if dependency_status != "available":
+            return BuiltinPrediction(
+                model_id=model_id,
+                status="model_unavailable",
+                values=[],
+                warnings=[
+                    *base_warnings,
+                    {
+                        "code": "missing_optional_dependency",
+                        "message": "Optional dependency tabpfn-time-series is not installed.",
+                        "severity": "warning",
+                    },
+                ],
+                limitations=limitations,
+            )
+
     if len(train) < min_train_points:
         return BuiltinPrediction(
             model_id=model_id,
@@ -379,6 +418,8 @@ def run_single_builtin_model(
             extra_warnings = []
         elif model_id == "statsforecast_autoets":
             values, extra_warnings = _forecast_autoets(train, len(target_dates), snapshot.frequency)
+        elif model_id == EXPERIMENTAL_TABPFN_TS_MODEL_ID:
+            values, extra_warnings = forecast_with_tabpfn_ts(train, target_dates, snapshot.frequency)
         else:
             values = []
             extra_warnings = []

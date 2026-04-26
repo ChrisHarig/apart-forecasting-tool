@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.utils import ensure_country
+from app.config import get_settings
 from app.db import models
 from app.schemas.forecast import (
     ForecastBenchmarkDatasetPreview,
@@ -43,6 +44,12 @@ from app.services.normalization import (
     serializable,
 )
 from app.services.submissions import normalize_submitter_metadata
+from app.services.experimental_tabpfn_ts import (
+    MIN_TRAIN_POINTS as TABPFN_MIN_TRAIN_POINTS,
+    MODEL_ID as EXPERIMENTAL_TABPFN_TS_MODEL_ID,
+    forecast_with_tabpfn_ts,
+    get_tabpfn_dependency_status,
+)
 
 
 BENCHMARK_WARNING = {
@@ -145,6 +152,9 @@ class BuiltinForecastModel:
     citation_or_package_notes: str | None = None
     dependency_name: str | None = None
     warnings: tuple[str, ...] = ()
+    status: str = "builtin"
+    experimental: bool = False
+    enabled_by_default: bool = True
 
 
 @dataclass(frozen=True)
@@ -226,13 +236,53 @@ BUILTIN_MODELS: dict[str, BuiltinForecastModel] = {
         citation_or_package_notes="Uses Nixtla StatsForecast AutoETS if the optional `statsforecast` dependency is installed.",
         dependency_name="statsforecast",
     ),
+    EXPERIMENTAL_TABPFN_TS_MODEL_ID: BuiltinForecastModel(
+        id=EXPERIMENTAL_TABPFN_TS_MODEL_ID,
+        name="Experimental TabPFN-Time-Series",
+        model_kind="builtin_experimental",
+        model_family="foundation_time_series_experimental",
+        implementation_source="tabpfn-time-series",
+        description=(
+            "Experimental TabPFN-Time-Series benchmark run only on stored aggregate challenge snapshots "
+            "when explicitly requested and feature-flag enabled."
+        ),
+        min_train_points=TABPFN_MIN_TRAIN_POINTS,
+        limitations=(
+            "Experimental statistical/foundation time-series benchmark only; not an epidemiological model, public-health alert, or validated pandemic prediction.",
+            "Disabled by default and only runnable when SENTINEL_ENABLE_EXPERIMENTAL_TABPFN=true.",
+            "Requires the optional tabpfn-time-series dependency and a supported local no-remote inference path.",
+            "Uses stored aggregate observations only and never executes uploaded model code.",
+        ),
+        required_frequency_notes=(
+            "Uses exact daily, weekly, or monthly challenge target dates. Irregular or short series are returned as insufficient_data."
+        ),
+        supports_prediction_intervals="false",
+        default_parameters={"minimum_train_points": TABPFN_MIN_TRAIN_POINTS, "telemetry": "disabled by default"},
+        safety_notes=(
+            "Experimental statistical/foundation time-series benchmark only.",
+            "Not a validated epidemiological model.",
+            "Not a public-health alert.",
+            "No user model code is executed.",
+            "No remote inference is used by default.",
+        ),
+        citation_or_package_notes="Optional experimental dependency: tabpfn-time-series.",
+        dependency_name="tabpfn_time_series",
+        warnings=("Experimental model is disabled by default and excluded from default benchmark runs.",),
+        status="experimental",
+        experimental=True,
+        enabled_by_default=False,
+    ),
 }
 
 
-def list_forecast_models(db: Session) -> list[ForecastModelRead]:
+def list_forecast_models(db: Session, *, include_experimental: bool = False) -> list[ForecastModelRead]:
     uploaded = db.execute(select(models.ForecastModel).order_by(models.ForecastModel.name)).scalars().all()
     uploaded_by_id = {model.id: model for model in uploaded}
-    output = [_builtin_model_read(model) for model in BUILTIN_MODELS.values()]
+    output = [
+        _builtin_model_read(model)
+        for model in BUILTIN_MODELS.values()
+        if include_experimental or not model.experimental
+    ]
     output.extend(_db_model_read(model) for model_id, model in uploaded_by_id.items() if model_id not in BUILTIN_MODELS)
     return output
 
@@ -250,8 +300,13 @@ def default_builtin_model_ids() -> list[str]:
     return [
         model.id
         for model in BUILTIN_MODELS.values()
-        if model.id != "statsforecast_autoets" or _dependency_status(model) == "available"
+        if model.enabled_by_default
+        and (model.id != "statsforecast_autoets" or _dependency_status(model) == "available")
     ]
+
+
+def is_experimental_tabpfn_enabled() -> bool:
+    return bool(get_settings().enable_experimental_tabpfn)
 
 
 def parse_prediction_csv(content: str) -> list[dict[str, str]]:
@@ -1082,6 +1137,37 @@ def _benchmark_builtin(
                 data_quality_notes=data_quality_notes,
                 dataset_snapshot_id=dataset_snapshot_id,
             )
+    elif model_id == EXPERIMENTAL_TABPFN_TS_MODEL_ID:
+        min_train_points = model.min_train_points
+        if not is_experimental_tabpfn_enabled():
+            return _model_unavailable_result(
+                model,
+                n_train=len(train),
+                n_test=len(test),
+                train=train,
+                test=test,
+                dataset_snapshot_id=dataset_snapshot_id,
+                status="experimental_disabled",
+                code="experimental_disabled",
+                message=(
+                    "Experimental TabPFN-Time-Series is disabled. Set "
+                    "SENTINEL_ENABLE_EXPERIMENTAL_TABPFN=true to request this benchmark explicitly."
+                ),
+            )
+        if _dependency_status(model) != "available":
+            return _model_unavailable_result(
+                model,
+                n_train=len(train),
+                n_test=len(test),
+                train=train,
+                test=test,
+                dataset_snapshot_id=dataset_snapshot_id,
+                code="missing_optional_dependency",
+                message=(
+                    "Experimental TabPFN-Time-Series requires the optional `tabpfn-time-series` dependency. "
+                    "Install backend with `pip install -e \".[dev,experimental]\"`."
+                ),
+            )
     if len(train) < min_train_points:
         return _insufficient_result(
             model_id,
@@ -1120,6 +1206,9 @@ def _benchmark_builtin(
                     dataset_snapshot_id=dataset_snapshot_id,
                 )
             predictions, model_warnings = _forecast_autoets(train, len(test), frequency)
+        elif model_id == EXPERIMENTAL_TABPFN_TS_MODEL_ID:
+            target_dates = [day for day, _value in test]
+            predictions, model_warnings = forecast_with_tabpfn_ts(train, target_dates, frequency)
         else:
             return _insufficient_result(
                 model_id,
@@ -2065,9 +2154,23 @@ def _model_unavailable_result(
     train: list[tuple[date, float]] | None = None,
     test: list[tuple[date, float]] | None = None,
     dataset_snapshot_id: int | None = None,
+    status: str = "model_unavailable",
+    code: str = "missing_optional_dependency",
+    message: str | None = None,
 ) -> ForecastBenchmarkResultRead:
     train = train or []
     test = test or []
+    if message is None:
+        if model.id == EXPERIMENTAL_TABPFN_TS_MODEL_ID:
+            message = (
+                "Experimental TabPFN-Time-Series requires the optional `tabpfn-time-series` dependency. "
+                "Install backend with `pip install -e \".[dev,experimental]\"`."
+            )
+        else:
+            message = (
+                "StatsForecast AutoETS requires the optional `statsforecast` dependency. "
+                "Install backend with `pip install -e \".[dev,forecast]\"`."
+            )
     return ForecastBenchmarkResultRead(
         dataset_snapshot_id=dataset_snapshot_id,
         model_id=model.id,
@@ -2076,7 +2179,7 @@ def _model_unavailable_result(
         model_kind=model.model_kind,
         model_family=model.model_family,
         result_type="builtin_model",
-        status="model_unavailable",
+        status=status,
         n_train=n_train,
         n_test=n_test,
         train_start=train[0][0] if train else None,
@@ -2086,8 +2189,8 @@ def _model_unavailable_result(
         warnings=[
             BENCHMARK_WARNING,
             {
-                "code": "missing_optional_dependency",
-                "message": "StatsForecast AutoETS requires the optional `statsforecast` dependency. Install backend with `pip install -e \".[dev,forecast]\"`.",
+                "code": code,
+                "message": message,
                 "severity": "warning",
             },
         ],
@@ -2106,6 +2209,8 @@ def _benchmark_output_status(results: list[ForecastBenchmarkResultRead]) -> str:
         return "partial"
     if "model_unavailable" in statuses:
         return "partial"
+    if "experimental_disabled" in statuses:
+        return "partial"
     return "insufficient_data"
 
 
@@ -2120,6 +2225,9 @@ def _builtin_model_read(model: BuiltinForecastModel) -> ForecastModelRead:
         implementation_source=model.implementation_source,
         benchmark_only=True,
         builtin=True,
+        experimental=model.experimental,
+        enabled_by_default=model.enabled_by_default,
+        feature_flag_enabled=is_experimental_tabpfn_enabled() if model.experimental else True,
         accepts_uploaded_code=False,
         accepts_prediction_csv=False,
         required_observation_count=model.min_train_points,
@@ -2129,7 +2237,7 @@ def _builtin_model_read(model: BuiltinForecastModel) -> ForecastModelRead:
         default_parameters=dict(model.default_parameters or {}),
         description=model.description,
         owner="Sentinel Atlas",
-        status="builtin",
+        status=model.status,
         safety_notes=list(model.safety_notes),
         citation_or_package_notes=model.citation_or_package_notes,
         dependency_status=_dependency_status(model),
@@ -2175,6 +2283,8 @@ def _db_model_read(model: models.ForecastModel) -> ForecastModelRead:
 
 
 def _dependency_status(model: BuiltinForecastModel) -> str:
+    if model.id == EXPERIMENTAL_TABPFN_TS_MODEL_ID:
+        return get_tabpfn_dependency_status()
     if model.dependency_name is None:
         return "available"
     return "available" if importlib.util.find_spec(model.dependency_name) is not None else "missing_optional_dependency"

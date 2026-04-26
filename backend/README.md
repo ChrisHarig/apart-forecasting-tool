@@ -12,7 +12,7 @@ This backend is not a pathogen engineering, wet-lab, gain-of-function, evasion, 
 - Alembic scaffold for future migrations.
 - Connector registry with metadata-only placeholders for public-health, wastewater, aviation, maritime, forecast, news, and user-upload sources.
 - Normalization service for aggregate time-series CSV uploads.
-- Forecast benchmark and challenge POC for stored aggregate time-series with naive, seasonal naive, ARIMA, SARIMA, optional StatsForecast AutoETS, uploaded prediction CSV baselines, built-in challenge predictions stored as internal prediction sets, scoring, leaderboards, and observed-vs-predicted comparison rows.
+- Forecast benchmark and challenge POC for stored aggregate time-series with naive, seasonal naive, ARIMA, SARIMA, optional StatsForecast AutoETS, disabled-by-default experimental TabPFN-Time-Series metadata, uploaded prediction CSV baselines, built-in challenge predictions stored as internal prediction sets, scoring, leaderboards, and observed-vs-predicted comparison rows.
 - Feature availability, data quality, and model eligibility services that expose missingness instead of hiding it.
 - Placeholder model-run behavior that produces only limited summaries when uploaded/test data supports them, otherwise `insufficient_data`.
 
@@ -79,6 +79,7 @@ Models:
 Forecast benchmarks:
 
 - `GET /api/forecast-models`
+- `GET /api/forecast-models?includeExperimental=true`
 - `GET /api/forecast-models/{modelId}`
 - `POST /api/forecast-models/predictions/upload`
 - `GET /api/forecast-models/predictions`
@@ -218,6 +219,7 @@ Built-in benchmark models:
 - `statsmodels_arima`
 - `statsmodels_sarima`
 - `statsforecast_autoets`
+- `experimental_tabpfn_ts` when `includeExperimental=true`; disabled by default
 
 `statsforecast_autoets` is the approved whitelisted open-source model for this stage. It uses Nixtla StatsForecast AutoETS as a statistical ETS benchmark only. It is not an epidemiological model, public-health alert, Rt/R0 estimate, risk score, or validated pandemic prediction.
 
@@ -229,6 +231,31 @@ pip install -e ".[dev,forecast]"
 ```
 
 If `statsforecast` is not installed, `/api/forecast-models/statsforecast_autoets` still appears with `dependency_status: "missing_optional_dependency"`, and explicit benchmark requests return a structured `model_unavailable` result.
+
+Experimental TabPFN-Time-Series spike:
+
+- Model ID: `experimental_tabpfn_ts`
+- Display name: `Experimental TabPFN-Time-Series`
+- Registry visibility: hidden from `GET /api/forecast-models` by default; included by `GET /api/forecast-models?includeExperimental=true`.
+- Detail endpoint: `GET /api/forecast-models/experimental_tabpfn_ts` returns metadata even when disabled or missing the optional dependency.
+- Feature flag: `SENTINEL_ENABLE_EXPERIMENTAL_TABPFN=false` by default.
+- Telemetry opt-out: the backend sets `TABPFN_DISABLE_TELEMETRY=1` on the experimental code path.
+- Default behavior: `/api/forecast-challenges/{challengeId}/run-builtins` does not include this model unless explicitly requested in `modelIds`.
+- Failure statuses: `experimental_disabled`, `model_unavailable`, `insufficient_data`, or `failed`.
+
+Install the optional experimental dependency only for local spike testing:
+
+```bash
+cd backend
+pip install -e ".[dev,experimental]"
+```
+
+```powershell
+$env:SENTINEL_ENABLE_EXPERIMENTAL_TABPFN = "true"
+$env:TABPFN_DISABLE_TELEMETRY = "1"
+```
+
+The experimental model is a backend-owned benchmark only. It does not use Hugging Face tokens, Prior Labs tokens, remote inference, uploaded model code, or user-provided model artifacts by default. It is not a validated epidemiological model, public-health alert, risk score, or operational forecast.
 
 Preview a benchmark without saving it:
 
@@ -354,7 +381,7 @@ curl -X POST http://127.0.0.1:8000/api/forecast-challenges/1/run-builtins ^
 
 Successful built-ins are stored as `PredictionSet` rows with `prediction_source: "built_in"`, `submission_track: "internal_baseline"`, `review_status: "approved"`, and `validation_status: "valid_for_snapshot"`. Their `PredictionPoint` rows use exactly the challenge target dates. Prospective challenge prediction sets use `scoring_status: "pending_truth"` until matching aggregate truth arrives; retrospective prediction sets can be scored immediately through the challenge scoring endpoint.
 
-Model-specific run statuses are `complete`, `insufficient_data`, `model_unavailable`, and `failed`. One unavailable or failed built-in does not fail the whole run.
+Model-specific run statuses are `complete`, `insufficient_data`, `model_unavailable`, `experimental_disabled`, and `failed`. One unavailable, disabled, or failed built-in does not fail the whole run. Experimental models are never included in default built-in runs.
 
 Challenge statuses:
 
@@ -456,6 +483,7 @@ The frontend should:
 - call `/api/forecast-challenges/{id}/predictions` or `/api/prediction-sets` to list stored challenge prediction sets,
 - call `/api/prediction-sets/{id}/review` for lightweight hackathon review decisions,
 - call `/api/submitters` for public submitter labels without email addresses,
+- call `/api/forecast-models?includeExperimental=true` only in admin/experimental UI surfaces that can label disabled model dependencies clearly,
 - call `/api/forecast-benchmarks/preview` before showing benchmark results,
 - call `/api/forecast-models/predictions/upload` only for prediction CSVs, never executable artifacts,
 - call `/api/forecast-models/predictions` to list stored prediction sets,

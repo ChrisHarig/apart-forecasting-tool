@@ -18,8 +18,11 @@ router = APIRouter(prefix="/forecast-models", tags=["forecast-models"])
 
 
 @router.get("", response_model=list[ForecastModelRead], response_model_by_alias=False)
-def get_forecast_models(db: Session = Depends(get_db)) -> list[ForecastModelRead]:
-    return list_forecast_models(db)
+def get_forecast_models(
+    include_experimental: bool = Query(False, alias="includeExperimental"),
+    db: Session = Depends(get_db),
+) -> list[ForecastModelRead]:
+    return list_forecast_models(db, include_experimental=include_experimental)
 
 
 @router.post("/predictions/upload", response_model=ForecastPredictionUploadResult, response_model_by_alias=False)

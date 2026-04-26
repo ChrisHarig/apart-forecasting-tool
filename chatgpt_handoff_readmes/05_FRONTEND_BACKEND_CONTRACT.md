@@ -295,6 +295,7 @@ Call:
 
 ```text
 GET /api/forecast-models
+GET /api/forecast-models?includeExperimental=true
 GET /api/forecast-models/{modelId}
 ```
 
@@ -311,6 +312,9 @@ Built-in model item:
   "implementation_source": "statsforecast",
   "benchmark_only": true,
   "builtin": true,
+  "experimental": false,
+  "enabled_by_default": true,
+  "feature_flag_enabled": true,
   "accepts_uploaded_code": false,
   "accepts_prediction_csv": false,
   "required_observation_count": 8,
@@ -332,6 +336,43 @@ Built-in model item:
 ```
 
 If the optional `statsforecast` package is not installed, the same item is returned with `dependency_status: "missing_optional_dependency"` and explicit AutoETS benchmark requests return `model_unavailable`.
+
+Experimental model visibility:
+
+- `GET /api/forecast-models` omits disabled experimental models by default.
+- `GET /api/forecast-models?includeExperimental=true` includes `experimental_tabpfn_ts`.
+- `GET /api/forecast-models/experimental_tabpfn_ts` returns metadata even when the feature flag is disabled.
+
+Experimental TabPFN-Time-Series metadata uses:
+
+```json
+{
+  "id": "experimental_tabpfn_ts",
+  "display_name": "Experimental TabPFN-Time-Series",
+  "model_family": "foundation_time_series_experimental",
+  "status": "experimental",
+  "experimental": true,
+  "enabled_by_default": false,
+  "feature_flag_enabled": false,
+  "dependency_status": "missing_optional_dependency",
+  "benchmark_only": true,
+  "builtin": true,
+  "accepts_uploaded_code": false,
+  "accepts_prediction_csv": false,
+  "limitations": [
+    "Experimental statistical/foundation time-series benchmark only; not an epidemiological model, public-health alert, or validated pandemic prediction."
+  ],
+  "safety_notes": [
+    "Experimental statistical/foundation time-series benchmark only.",
+    "Not a validated epidemiological model.",
+    "Not a public-health alert.",
+    "No user model code is executed.",
+    "No remote inference is used by default."
+  ]
+}
+```
+
+The experimental model is excluded from default built-in runs. If explicitly requested while disabled, `/api/forecast-challenges/{challengeId}/run-builtins` and benchmark preview responses return `experimental_disabled`. If enabled but the optional dependency is missing, they return `model_unavailable`. Frontend surfaces must label this as experimental benchmark-only output and must not describe it as a validated public-health forecast.
 
 ## Benchmark Dataset Snapshots
 
@@ -626,7 +667,7 @@ Response:
 Status meanings:
 
 ```text
-complete | insufficient_data | model_unavailable | failed
+complete | insufficient_data | model_unavailable | experimental_disabled | failed
 ```
 
 Prediction set conventions:
@@ -636,6 +677,7 @@ Prediction set conventions:
 - Prospective challenges return `scoring_status: "pending_truth"` because future observed values do not exist yet.
 - `overwrite_existing: false` reuses an existing built-in prediction set instead of duplicating it.
 - `overwrite_existing: true` replaces the previous built-in set for the same challenge/model.
+- `experimental_disabled` means the model was explicitly requested but the required feature flag is false.
 - Built-in prediction sets are benchmark-only metric forecasts, not public-health alerts or validated epidemiological predictions.
 
 ## Challenge Prediction Upload, Scoring, And Overlays
@@ -1056,7 +1098,7 @@ Response:
 }
 ```
 
-Forecast benchmark values are historical metric evaluations over a holdout window. They must not be presented as public-health alerts, risk scores, Rt/R0 estimates, or operational guidance. If no matching stored observations exist, preview returns `output_status: "insufficient_data"` and create returns HTTP 400. Model-specific statuses include `complete`, `insufficient_data`, `model_unavailable`, `invalid_predictions`, and `failed`.
+Forecast benchmark values are historical metric evaluations over a holdout window. They must not be presented as public-health alerts, risk scores, Rt/R0 estimates, or operational guidance. If no matching stored observations exist, preview returns `output_status: "insufficient_data"` and create returns HTTP 400. Model-specific statuses include `complete`, `insufficient_data`, `model_unavailable`, `experimental_disabled`, `invalid_predictions`, and `failed`.
 
 ## Data-Quality Warnings
 

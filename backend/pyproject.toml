@@ -24,6 +24,9 @@ dev = [
 forecast = [
   "statsforecast>=1.7",
 ]
+experimental = [
+  "tabpfn-time-series>=1.0,<2.0",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["app/tests"]
