@@ -5,6 +5,12 @@ import { BoundaryMap, type BoundaryFeatureProps, type BoundarySelection } from "
 import { buildCountryBoundariesGeoJson } from "../Map/countrySelectionLayer";
 import { iso2ToIso3 } from "../../utils/countryCodes";
 import { loadUsCountiesGeoJson, loadUsStatesGeoJson } from "../../data/locations/usAtlas";
+import { loadIso3166_2GeoJson } from "../../data/locations/iso3166_2";
+import {
+  SYNTHETIC_BOUNDARY_MAP,
+  expandSyntheticToBoundaryIds,
+  pickSyntheticTargetKind
+} from "../../data/locations/syntheticBoundary";
 import {
   boundaryLabel,
   detectBoundaryLevels,
@@ -46,7 +52,7 @@ const SPEED_OPTIONS: { label: string; ms: number }[] = [
 ];
 
 export function DatasetMap({ source, rows }: Props) {
-  const levels = useMemo(() => detectBoundaryLevels(rows), [rows]);
+  const levels = useMemo(() => extendWithFallbacks(detectBoundaryLevels(rows)), [rows]);
   const renderableLevels = useMemo(() => levels.filter((l) => isRenderable(l.boundaryType)), [levels]);
 
   const [chosenKey, setChosenKey] = useState<string | null>(null);
@@ -116,9 +122,9 @@ function LevelSelector({ levels, chosenKey, onChange }: LevelSelectorProps) {
               }
               className={`rounded-md border px-2 py-0.5 text-[11px] transition ${
                 active
-                  ? "border-red-500/60 bg-red-700/40 text-red-100"
+                  ? "border-sky-500/60 bg-sky-700/40 text-sky-100"
                   : renderable
-                  ? "border-white/15 bg-white/[0.04] text-neutral-200 hover:border-red-500 hover:text-red-200"
+                  ? "border-white/15 bg-white/[0.04] text-neutral-200 hover:border-sky-500 hover:text-sky-200"
                   : "border-white/10 bg-white/[0.02] text-neutral-500 cursor-not-allowed"
               }`}
             >
@@ -141,7 +147,7 @@ function boundaryLabelShort(t: BoundaryType): string {
     case "us-county":
       return "US county";
     case "iso3166-2":
-      return "subnational (not yet)";
+      return "subnational";
     case "subnational-region":
       return "ad-hoc region";
     case "point":
@@ -163,7 +169,18 @@ function RenderedMap({ level, source, rows }: RenderedMapProps) {
   const country = useCountryView(level, source);
   const usState = useUsBoundaryView(level, "us-state");
   const usCounty = useUsBoundaryView(level, "us-county");
-  const view = level.boundaryType === "country" ? country : level.boundaryType === "us-state" ? usState : usCounty;
+  const iso3166_2 = useIso3166_2View(level);
+  const synthetic = useSyntheticView(level);
+  const view =
+    level.boundaryType === "country"
+      ? country
+      : level.boundaryType === "us-state"
+      ? usState
+      : level.boundaryType === "us-county"
+      ? usCounty
+      : level.boundaryType === "iso3166-2"
+      ? iso3166_2
+      : synthetic;
 
   const [selected, setSelected] = useState<BoundarySelection | null>(null);
   useEffect(() => {
@@ -200,8 +217,11 @@ function RenderedMap({ level, source, rows }: RenderedMapProps) {
       const dateRaw = row[dateField];
       const date = typeof dateRaw === "string" ? dateRaw.slice(0, 10) : String(dateRaw ?? "");
       if (!date) continue;
-      const id = rowToBoundaryId(row, level.boundaryType);
-      if (!id) continue;
+      // Synthetic codes can map to multiple boundary ids (HHS regions paint
+      // onto every member state). For non-synthetic types, this returns a
+      // single-element array.
+      const ids = expandToBoundaryIds(row, level.boundaryType, view);
+      if (ids.length === 0) continue;
       const valueRaw = row[metric];
       const value = typeof valueRaw === "number" ? valueRaw : Number(valueRaw);
       if (!Number.isFinite(value)) continue;
@@ -211,12 +231,14 @@ function RenderedMap({ level, source, rows }: RenderedMapProps) {
         g = new Map();
         buckets.set(date, g);
       }
-      let arr = g.get(id);
-      if (!arr) {
-        arr = [];
-        g.set(id, arr);
+      for (const id of ids) {
+        let arr = g.get(id);
+        if (!arr) {
+          arr = [];
+          g.set(id, arr);
+        }
+        arr.push(value);
       }
-      arr.push(value);
     }
 
     const valueByDateAndId = new Map<string, Map<string, number>>();
@@ -298,13 +320,16 @@ function RenderedMap({ level, source, rows }: RenderedMapProps) {
   const selectedBreakdownRows = useMemo(() => {
     if (!selected || !currentDate || !dateField) return [];
     return rows.filter((r) => {
-      const id = rowToBoundaryId(r, level.boundaryType);
-      if (id !== selected.id) return false;
+      // Synthetic-mapped rows can contribute to several boundaries, so we
+      // check membership rather than equality. expandToBoundaryIds handles
+      // both cases uniformly.
+      const ids = expandToBoundaryIds(r, level.boundaryType, view);
+      if (!ids.includes(selected.id)) return false;
       const dRaw = r[dateField];
       const d = typeof dRaw === "string" ? dRaw.slice(0, 10) : String(dRaw ?? "");
       return d === currentDate;
     });
-  }, [selected, currentDate, dateField, rows, level.boundaryType]);
+  }, [selected, currentDate, dateField, rows, level.boundaryType, view]);
 
   // Play / pause.
   const [isPlaying, setIsPlaying] = useState(false);
@@ -447,13 +472,13 @@ function InfoPanel({
           <>
             <span className="font-mono text-sm text-white">{currentDate}</span>
             <span className="text-[11px] text-neutral-400">
-              <span className="inline-block h-2 w-2 rounded-sm align-middle" style={{ background: "rgba(220,38,38,0.42)" }} />{" "}
+              <span className="inline-block h-2 w-2 rounded-sm align-middle" style={{ background: "rgba(14, 165, 233, 0.42)" }} />{" "}
               {reportingCount.toLocaleString()} reporting
             </span>
           </>
         ) : (
           <span className="text-[11px] text-neutral-400">
-            <span className="inline-block h-2 w-2 rounded-sm align-middle" style={{ background: "rgba(220,38,38,0.42)" }} />{" "}
+            <span className="inline-block h-2 w-2 rounded-sm align-middle" style={{ background: "rgba(14, 165, 233, 0.42)" }} />{" "}
             {coverageBaseline.toLocaleString()} with data
           </span>
         )}
@@ -579,7 +604,7 @@ function ColorRamp({ vmax, unit }: ColorRampProps) {
       <span className="text-neutral-300">0</span>
       <span
         className="block h-2 w-24 rounded-sm"
-        style={{ background: "linear-gradient(to right, rgba(220,38,38,0.10), rgba(220,38,38,0.85))" }}
+        style={{ background: "linear-gradient(to right, rgba(14, 165, 233, 0.10), rgba(14, 165, 233, 0.85))" }}
         aria-hidden="true"
       />
       <span className="text-neutral-300">
@@ -651,7 +676,7 @@ function Scrubber({
             type="button"
             onClick={() => onDateIdx(Math.max(startIdx, safeIdx - 1))}
             disabled={safeIdx <= startIdx}
-            className="rounded border border-white/10 p-1 text-neutral-200 transition hover:border-red-500 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded border border-white/10 p-1 text-neutral-200 transition hover:border-sky-500 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-40"
             aria-label="Previous date"
           >
             <ChevronLeft className="h-3.5 w-3.5" />
@@ -660,7 +685,7 @@ function Scrubber({
             type="button"
             onClick={onTogglePlay}
             disabled={atEnd && !isPlaying}
-            className="rounded border border-white/10 p-1 text-neutral-200 transition hover:border-red-500 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded border border-white/10 p-1 text-neutral-200 transition hover:border-sky-500 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-40"
             aria-label={isPlaying ? "Pause" : "Play"}
             title={atEnd && !isPlaying ? "At end — step back to play again" : undefined}
           >
@@ -670,7 +695,7 @@ function Scrubber({
             type="button"
             onClick={() => onDateIdx(Math.min(endIdx, safeIdx + 1))}
             disabled={atEnd}
-            className="rounded border border-white/10 p-1 text-neutral-200 transition hover:border-red-500 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded border border-white/10 p-1 text-neutral-200 transition hover:border-sky-500 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-40"
             aria-label="Next date"
           >
             <ChevronRight className="h-3.5 w-3.5" />
@@ -724,7 +749,7 @@ function TimelineBar({ dates, startIdx, endIdx, playheadIdx, onStartIdx, onEndId
       <div className="absolute left-1 right-1 top-1/2 h-1 -translate-y-1/2 rounded-full bg-white/[0.10]" />
       {/* Active band — between the trim handles. */}
       <div
-        className="absolute top-1/2 h-1 -translate-y-1/2 rounded-full bg-red-500/40"
+        className="absolute top-1/2 h-1 -translate-y-1/2 rounded-full bg-sky-500/40"
         style={{ left: `calc(${startPct}% + 4px)`, width: `calc(${trimWidth}% - 0px)` }}
       />
 
@@ -871,14 +896,77 @@ function rowToBoundaryId(row: DatasetRow, boundaryType: BoundaryType): string | 
   const v = row.location_id;
   if (typeof v !== "string") return null;
   switch (boundaryType) {
-    case "country":
-      return iso2ToIso3(v.toUpperCase());
+    case "country": {
+      // ISO 3166-2 (`GB-ENG`) and IBGE-style native codes (`BR-IBGE-...`)
+      // both prefix the ISO-2 country code with a hyphen — strip to get
+      // the country. Bare ISO-2 (`GB`) passes through untouched.
+      const cc = v.length > 2 && v.includes("-") ? v.slice(0, 2) : v;
+      return iso2ToIso3(cc.toUpperCase());
+    }
     case "us-state":
     case "us-county":
       return v;
+    case "iso3166-2":
+      return v.toUpperCase();
     default:
       return null;
   }
+}
+
+/**
+ * Resolve a row's location_id to one or more boundary ids in the coordinate
+ * system the loaded view uses.
+ *
+ * Synthetic codes (US-HHS-1, US-FLUSURV-CA, US-METRO-NYC, ...) consult the
+ * synthetic-boundary registry and may expand to multiple ids — an HHS-region
+ * row paints onto every member state. Non-synthetic types delegate to
+ * `rowToBoundaryId` and return its result as a single-element array.
+ */
+function expandToBoundaryIds(
+  row: DatasetRow,
+  boundaryType: BoundaryType,
+  view: BoundaryView | null
+): string[] {
+  if (boundaryType === "subnational-region" && view?.syntheticTargetKind) {
+    const v = row.location_id;
+    if (typeof v !== "string") return [];
+    const ids = expandSyntheticToBoundaryIds(v.toUpperCase(), view.syntheticTargetKind);
+    if (view.syntheticTargetKind === "country") {
+      // The synthetic registry stores country targets as ISO-2; the country
+      // GeoJSON keys on ISO-3. Translate.
+      return ids.map((iso2) => iso2ToIso3(iso2)).filter((x): x is string => Boolean(x));
+    }
+    return ids;
+  }
+  const single = rowToBoundaryId(row, boundaryType);
+  return single ? [single] : [];
+}
+
+// When a dataset is sub-state / region-only (no native country-level rows),
+// synthesize a country-level fallback so the user can roll up to country
+// granularity from the LevelSelector. The fallback rolls iso3166-2 codes
+// (BR-SP → BR), IBGE-style codes (BR-IBGE-... → BR), and synthetic regional
+// codes (US-HHS-1 → US, US-FLUSURV-CA → US) up by their 2-letter prefix.
+function extendWithFallbacks(levels: DetectedLevel[]): DetectedLevel[] {
+  const hasCountry = levels.some((l) => l.boundaryType === "country");
+  if (hasCountry) return levels;
+  const subnational =
+    levels.find((l) => l.boundaryType === "iso3166-2") ??
+    levels.find((l) => l.boundaryType === "subnational-region");
+  if (!subnational) return levels;
+  const countryIds = new Set<string>();
+  for (const id of subnational.ids) {
+    if (typeof id === "string" && id.length >= 2) countryIds.add(id.slice(0, 2).toUpperCase());
+  }
+  if (countryIds.size === 0) return levels;
+  const synthesized: DetectedLevel = {
+    level: `${subnational.level} (aggregated)`,
+    boundaryType: "country",
+    ids: countryIds,
+    rowCount: subnational.rowCount,
+    unmatchedSamples: []
+  };
+  return [...levels, synthesized];
 }
 
 function formatNumber(v: number): string {
@@ -898,6 +986,11 @@ interface BoundaryView {
   geojson: FeatureCollection<Geometry, BoundaryFeatureProps>;
   highlightedIds: ReadonlySet<string>;
   scopeIds?: ReadonlySet<string>;
+  // For synthetic-mapped levels: tells the bucketing loop which target
+  // boundary kind to expand the row's location_id into. Absent for the
+  // standard country / us-state / us-county / iso3166-2 paths — they use
+  // `rowToBoundaryId` directly.
+  syntheticTargetKind?: "us-state" | "country";
 }
 
 function useCountryView(level: DetectedLevel, source: SourceMetadata): BoundaryView | null {
@@ -950,6 +1043,111 @@ function useUsBoundaryView(level: DetectedLevel, expectedType: BoundaryType): Bo
   }, [level, expectedType]);
   return view;
 }
+
+function useIso3166_2View(level: DetectedLevel): BoundaryView | null {
+  const [view, setView] = useState<BoundaryView | null>(null);
+  useEffect(() => {
+    if (level.boundaryType !== "iso3166-2") {
+      setView(null);
+      return;
+    }
+    // Filter polygons to just the countries the dataset references — keeps
+    // the rendering snappy when the dataset is single-country (UKHSA, PHAC).
+    const countries = new Set<string>();
+    for (const id of level.ids) {
+      if (typeof id === "string" && id.length >= 2) countries.add(id.slice(0, 2).toUpperCase());
+    }
+    let cancelled = false;
+    loadIso3166_2GeoJson(countries).then((geojson) => {
+      if (cancelled) return;
+      const polygonIds = new Set<string>();
+      for (const f of geojson.features) polygonIds.add(f.properties.id);
+      // highlightedIds = rows that actually have a polygon to render against.
+      // scopeIds = every polygon in the loaded countries (so unmatched-but-
+      // expected regions show as scope-missing instead of disappearing).
+      const highlighted = new Set<string>();
+      for (const id of level.ids) if (polygonIds.has(String(id).toUpperCase())) highlighted.add(String(id).toUpperCase());
+      setView({ geojson, highlightedIds: highlighted, scopeIds: polygonIds });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [level]);
+  return view;
+}
+
+function useSyntheticView(level: DetectedLevel): BoundaryView | null {
+  const [view, setView] = useState<BoundaryView | null>(null);
+  useEffect(() => {
+    if (level.boundaryType !== "subnational-region") {
+      setView(null);
+      return;
+    }
+    // Decide what real-boundary kind the level renders as. If any code is
+    // unmapped or the codes resolve to inconsistent kinds, bail and let
+    // extendWithFallbacks surface a country-aggregated alternative.
+    const targetKind = pickSyntheticTargetKind(level.ids);
+    if (!targetKind) {
+      setView(null);
+      return;
+    }
+
+    if (targetKind === "us-state") {
+      // Compute the union of all FIPS the level's synthetic codes paint onto.
+      const highlighted = new Set<string>();
+      for (const code of level.ids) {
+        for (const fips of expandSyntheticToBoundaryIds(code.toUpperCase(), "us-state")) {
+          highlighted.add(fips);
+        }
+      }
+      let cancelled = false;
+      loadUsStatesGeoJson().then((geojson) => {
+        if (cancelled) return;
+        const scopeIds = new Set<string>();
+        for (const f of geojson.features) scopeIds.add(f.properties.id);
+        setView({
+          geojson,
+          highlightedIds: highlighted,
+          scopeIds,
+          syntheticTargetKind: "us-state"
+        });
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    // targetKind === "country": render at country level. Use the same
+    // ISO-3 keyed country GeoJSON as `useCountryView`.
+    const base = buildCountryBoundariesGeoJson();
+    const reshaped: FeatureCollection<Geometry, BoundaryFeatureProps> = {
+      type: "FeatureCollection",
+      features: base.features.map((f) => ({
+        ...f,
+        properties: { id: f.properties.iso3, name: f.properties.name }
+      }))
+    };
+    const highlighted = new Set<string>();
+    for (const code of level.ids) {
+      for (const iso2 of expandSyntheticToBoundaryIds(code.toUpperCase(), "country")) {
+        const iso3 = iso2ToIso3(iso2);
+        if (iso3) highlighted.add(iso3);
+      }
+    }
+    setView({
+      geojson: reshaped,
+      highlightedIds: highlighted,
+      syntheticTargetKind: "country"
+    });
+  }, [level]);
+  return view;
+}
+
+// Quiet "unused" lint for SYNTHETIC_BOUNDARY_MAP — it's referenced indirectly
+// via expandSyntheticToBoundaryIds / pickSyntheticTargetKind, but importing
+// it here documents the dependency in this file and helps future readers
+// jump to the registry.
+void SYNTHETIC_BOUNDARY_MAP;
 
 interface UnsupportedNoteProps {
   levels: DetectedLevel[];

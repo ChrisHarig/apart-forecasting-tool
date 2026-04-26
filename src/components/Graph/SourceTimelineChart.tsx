@@ -16,7 +16,7 @@ const TOP_N_DEFAULT = 8;
 
 // Distinct enough at small sizes; cycles for >8 groups.
 const SERIES_COLORS = [
-  "#ef4444", // red
+  "#0ea5e9", // red
   "#3b82f6", // blue
   "#10b981", // emerald
   "#f59e0b", // amber
@@ -318,7 +318,7 @@ export function SourceTimelineChart({ source, rows }: Props) {
     <div className="space-y-3">
       <div className="flex flex-wrap items-start gap-3 text-xs">
         {/* Metric */}
-        <div className="flex min-w-[160px] flex-col gap-1 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2">
+        <div className="flex min-h-[92px] min-w-[160px] flex-col gap-1 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2">
           <span className="text-[10px] font-semibold uppercase text-neutral-400">Metric (Y axis)</span>
           <select
             value={metric ?? ""}
@@ -331,7 +331,7 @@ export function SourceTimelineChart({ source, rows }: Props) {
               </option>
             ))}
           </select>
-          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-neutral-400">
+          <div className="mt-auto flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-neutral-400">
             {valueColumnMeta?.unit && (
               <span>
                 unit: <span className="text-neutral-200">{valueColumnMeta.unit}</span>
@@ -348,10 +348,10 @@ export function SourceTimelineChart({ source, rows }: Props) {
           </div>
         </div>
 
-        {/* Group by */}
+        {/* Split by (formerly "Group by") */}
         {categoricalFields.length > 0 && (
-          <div className="flex min-w-[160px] flex-col gap-1 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2">
-            <span className="text-[10px] font-semibold uppercase text-neutral-400">Group by</span>
+          <div className="flex min-h-[92px] min-w-[160px] flex-col gap-1 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2">
+            <span className="text-[10px] font-semibold uppercase text-neutral-400">Split by</span>
             <select
               value={groupBy}
               onChange={(e) => setGroupBy(e.target.value)}
@@ -364,14 +364,15 @@ export function SourceTimelineChart({ source, rows }: Props) {
                 </option>
               ))}
             </select>
-            {groupBy !== NO_GROUP && (
-              <div className="flex items-center justify-between gap-2 text-[10px] text-neutral-400">
-                <span>
-                  {seriesPickerActive
-                    ? `${renderedGroupKeys.length} of ${groupKeys.length} series`
-                    : `${groupKeys.length} ${groupKeys.length === 1 ? "series" : "series"}`}
-                </span>
-                {seriesPickerActive && (
+            <div className="mt-auto flex items-center justify-between gap-2 text-[10px] text-neutral-400">
+              {groupBy !== NO_GROUP ? (
+                <>
+                  <span>
+                    {seriesPickerActive
+                      ? `${renderedGroupKeys.length} of ${groupKeys.length} series`
+                      : `${groupKeys.length} ${groupKeys.length === 1 ? "series" : "series"}`}
+                  </span>
+                  {seriesPickerActive && (
                   <div className="relative" ref={seriesMenuRef}>
                     <button
                       type="button"
@@ -380,7 +381,7 @@ export function SourceTimelineChart({ source, rows }: Props) {
                       aria-label="Pick series"
                       aria-haspopup="menu"
                       aria-expanded={seriesMenuOpen}
-                      className="flex items-center gap-1 rounded border border-white/10 px-1.5 py-0.5 text-neutral-200 hover:border-red-500 hover:text-red-200"
+                      className="flex items-center gap-1 rounded border border-white/10 px-1.5 py-0.5 text-neutral-200 hover:border-sky-500 hover:text-sky-200"
                     >
                       <ListFilter className="h-3 w-3" />
                       Pick
@@ -397,16 +398,24 @@ export function SourceTimelineChart({ source, rows }: Props) {
                     )}
                   </div>
                 )}
-              </div>
-            )}
+                </>
+              ) : (
+                // Empty bottom slot keeps the box height consistent with
+                // the Metric panel and aligns the select control across boxes.
+                <span aria-hidden="true">&nbsp;</span>
+              )}
+            </div>
           </div>
         )}
 
-        {/* Filters */}
+        {/* Filters: each chip is a self-contained label+select mini-panel,
+            visually parallel to Metric / Split by. The `+` button sits in
+            the same shape (label above, control below) so its position
+            matches the selects in the other boxes. */}
         {(categoricalFields.length > 0 || activeFilters.length > 0) && (
-          <div className="flex flex-col gap-1 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2">
-            <span className="text-[10px] font-semibold uppercase text-neutral-400">Filters</span>
-            <div className="flex flex-wrap items-end gap-2">
+          <div className="flex min-h-[92px] flex-wrap items-start gap-2 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2">
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-semibold uppercase text-neutral-400">Filter</span>
               <div className="relative" ref={menuRef}>
                 <button
                   type="button"
@@ -416,7 +425,7 @@ export function SourceTimelineChart({ source, rows }: Props) {
                   aria-label="Add filter"
                   aria-haspopup="menu"
                   aria-expanded={menuOpen}
-                  className="flex h-7 w-7 items-center justify-center rounded-md border border-white/15 bg-white/[0.04] text-neutral-300 transition hover:border-red-500 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-white/15 disabled:hover:text-neutral-300"
+                  className="flex h-[28px] w-[28px] items-center justify-center rounded-md border border-white/15 bg-white/[0.04] text-neutral-300 transition hover:border-sky-500 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-white/15 disabled:hover:text-neutral-300"
                 >
                   <Plus className="h-3.5 w-3.5" />
                 </button>
@@ -444,44 +453,44 @@ export function SourceTimelineChart({ source, rows }: Props) {
                   </div>
                 )}
               </div>
-
-              {activeFilters.map((filter) => {
-                const field = categoricalFields.find((f) => f.name === filter.name);
-                if (!field) return null;
-                return (
-                  <div key={filter.name} className="flex min-w-[120px] flex-col gap-0.5">
-                    <div className="flex items-center justify-between gap-1">
-                      <span
-                        className="truncate text-[10px] font-semibold uppercase text-neutral-400"
-                        title={filter.name}
-                      >
-                        {filter.name}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => removeFilter(filter.name)}
-                        className="rounded p-0.5 text-neutral-500 hover:bg-white/10 hover:text-white"
-                        aria-label={`Remove ${filter.name} filter`}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
-                    <select
-                      value={filter.value}
-                      onChange={(e) => setFilterValue(filter.name, e.target.value)}
-                      className="rounded-md border border-white/10 bg-black/60 px-2 py-1 text-white"
-                    >
-                      <option value={ALL}>All ({field.values.length})</option>
-                      {field.values.map((v) => (
-                        <option key={v} value={v}>
-                          {v}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                );
-              })}
             </div>
+
+            {activeFilters.map((filter) => {
+              const field = categoricalFields.find((f) => f.name === filter.name);
+              if (!field) return null;
+              return (
+                <div key={filter.name} className="flex min-w-[120px] flex-col gap-1">
+                  <div className="flex items-center justify-between gap-1">
+                    <span
+                      className="truncate text-[10px] font-semibold uppercase text-neutral-400"
+                      title={filter.name}
+                    >
+                      {filter.name}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeFilter(filter.name)}
+                      className="rounded p-0.5 text-neutral-500 hover:bg-white/10 hover:text-white"
+                      aria-label={`Remove ${filter.name} filter`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                  <select
+                    value={filter.value}
+                    onChange={(e) => setFilterValue(filter.name, e.target.value)}
+                    className="rounded-md border border-white/10 bg-black/60 px-2 py-1 text-white"
+                  >
+                    <option value={ALL}>All ({field.values.length})</option>
+                    {field.values.map((v) => (
+                      <option key={v} value={v}>
+                        {v}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -563,7 +572,7 @@ function SeriesPicker({ groupKeys, groupTotals, visibleSet, colorByGroup, onTogg
         <button
           type="button"
           onClick={onResetTopN}
-          className="text-[10px] text-neutral-400 hover:text-red-200"
+          className="text-[10px] text-neutral-400 hover:text-sky-200"
         >
           Reset to top {TOP_N_DEFAULT}
         </button>
@@ -573,7 +582,7 @@ function SeriesPicker({ groupKeys, groupTotals, visibleSet, colorByGroup, onTogg
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search…"
-        className="mt-2 w-full rounded border border-white/10 bg-black/60 px-2 py-1 text-xs text-white placeholder:text-neutral-500 focus:border-red-500 focus:outline-none"
+        className="mt-2 w-full rounded border border-white/10 bg-black/60 px-2 py-1 text-xs text-white placeholder:text-neutral-500 focus:border-sky-500 focus:outline-none"
       />
       <ul className="mt-2 max-h-[260px] space-y-0.5 overflow-y-auto pr-1">
         {filtered.map((g) => {
@@ -590,12 +599,12 @@ function SeriesPicker({ groupKeys, groupTotals, visibleSet, colorByGroup, onTogg
                   type="checkbox"
                   checked={checked}
                   onChange={() => onToggle(g)}
-                  className="accent-red-500"
+                  className="accent-sky-500"
                 />
                 <span
                   aria-hidden="true"
                   className="inline-block h-2 w-2 shrink-0 rounded-sm"
-                  style={{ background: colorByGroup[g] ?? "#ef4444", opacity: checked ? 1 : 0.4 }}
+                  style={{ background: colorByGroup[g] ?? "#0ea5e9", opacity: checked ? 1 : 0.4 }}
                 />
                 <span className="flex-1 truncate" title={g}>
                   {g}
@@ -638,7 +647,7 @@ function HoverCard({
               <span
                 aria-hidden="true"
                 className="inline-block h-2 w-2 rounded-sm"
-                style={{ background: colorByGroup[key] ?? "#ef4444" }}
+                style={{ background: colorByGroup[key] ?? "#0ea5e9" }}
               />
               {showSeriesName && <span className="text-neutral-200">{key}:</span>}
               <span className="font-mono text-neutral-100">

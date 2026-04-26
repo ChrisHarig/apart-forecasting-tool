@@ -44,7 +44,7 @@ export function ExplorerBody({ pane }: Props) {
             href={source.source_url}
             target="_blank"
             rel="noreferrer"
-            className="ml-auto flex items-center gap-1 text-xs text-red-300 hover:text-red-200"
+            className="ml-auto flex items-center gap-1 text-xs text-sky-300 hover:text-sky-200"
           >
             Source <ExternalLink className="h-3 w-3" />
           </a>
@@ -57,7 +57,7 @@ export function ExplorerBody({ pane }: Props) {
 
       {slice.status === "loading" && (
         <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-5 py-6">
-          <Loader2 className="h-6 w-6 shrink-0 animate-spin text-red-400" aria-hidden="true" />
+          <Loader2 className="h-6 w-6 shrink-0 animate-spin text-sky-400" aria-hidden="true" />
           <div>
             <p className="text-base font-semibold text-white">Fetching data from Huggingface…</p>
             <p className="text-xs text-neutral-400">Pulling rows for {source.pretty_name}.</p>
@@ -85,14 +85,14 @@ export function ExplorerBody({ pane }: Props) {
             <button
               type="button"
               onClick={() => setShowTable(!pane.showTable)}
-              className="flex items-center gap-1 rounded border border-white/10 px-2 py-0.5 text-neutral-200 transition hover:border-red-500 hover:text-red-200"
+              className="flex items-center gap-1 rounded border border-white/10 px-2 py-0.5 text-neutral-200 transition hover:border-sky-500 hover:text-sky-200"
             >
               <Table2 className="h-3 w-3" />
               {pane.showTable ? "Hide table" : "Show table"}
             </button>
           </div>
 
-          {pane.showTable && <DataTable rows={slice.data.rows} />}
+          {pane.showTable && <DataTable rows={slice.data.rows} filenameStem={source.id} />}
         </>
       )}
     </div>
@@ -112,7 +112,7 @@ function TabButton({ active, onClick, icon: Icon, label }: TabButtonProps) {
       type="button"
       onClick={onClick}
       className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-semibold transition ${
-        active ? "bg-red-700/40 text-red-100" : "text-neutral-300 hover:bg-white/[0.05] hover:text-white"
+        active ? "bg-sky-700/40 text-sky-100" : "text-neutral-300 hover:bg-white/[0.05] hover:text-white"
       }`}
       aria-pressed={active}
     >

@@ -6,9 +6,9 @@
 //   - everything: a faint "land" fill so unmapped regions still read as land
 //   - in scope but missing: a brighter neutral fill (e.g. a state in the US
 //     scope that didn't report)
-//   - has data: a saturated red fill
+//   - has data: a saturated sky-blue fill
 //
-// Plus a thin border on every region and a bright red border on the current
+// Plus a thin border on every region and a bright sky-blue border on the current
 // selection. The id field used as the highlight key is `properties.id` on
 // each feature; callers reshape their geojson to match.
 
@@ -45,7 +45,7 @@ interface Props {
   scopeIds?: ReadonlySet<string>;
   // Chloropleth mode: when present, replaces the binary has-data fill with a
   // value-driven fill. Values must be normalized to [0, 1]; the map paints
-  // `0` as faint red and `1` as saturated red, with anything outside that
+  // `0` as faint sky-blue and `1` as saturated sky-blue, with anything outside that
   // range (or unset) treated as "no data" and left transparent.
   valueByLocation?: ReadonlyMap<string, number>;
   selected: BoundarySelection | null;
@@ -194,7 +194,7 @@ export function BoundaryMap({
           paint: { "fill-color": mapColors.scopeMissing, "fill-outline-color": "rgba(0,0,0,0)" }
         });
       }
-      // Has-data fill — saturated red, on top. Used in binary mode (when
+      // Has-data fill — saturated sky-blue, on top. Used in binary mode (when
       // there's no per-region value to drive a chloropleth).
       if (!map.getLayer(HAS_DATA_FILL_LAYER)) {
         map.addLayer({
@@ -222,8 +222,8 @@ export function BoundaryMap({
                 "interpolate",
                 ["linear"],
                 ["feature-state", "value"],
-                0, "rgba(220, 38, 38, 0.10)",
-                1, "rgba(220, 38, 38, 0.85)"
+                0, "rgba(14, 165, 233, 0.10)",
+                1, "rgba(14, 165, 233, 0.85)"
               ]
             ],
             "fill-outline-color": "rgba(0,0,0,0)"
@@ -348,7 +348,7 @@ export function BoundaryMap({
       <button
         type="button"
         onClick={reset}
-        className="absolute right-3 top-[118px] rounded-md border border-white/15 bg-black/[0.88] px-3 py-2 text-xs font-semibold text-white shadow-lg backdrop-blur hover:border-red-500 hover:text-red-200"
+        className="absolute right-3 top-[118px] rounded-md border border-white/15 bg-black/[0.88] px-3 py-2 text-xs font-semibold text-white shadow-lg backdrop-blur hover:border-sky-500 hover:text-sky-200"
       >
         Reset view
       </button>

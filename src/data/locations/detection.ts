@@ -46,8 +46,11 @@ function classifyId(value: string): BoundaryType {
   if (FIPS_COUNTY.test(v)) return "us-county";
   if (FIPS_STATE.test(v)) return "us-state";
   if (ISO2.test(v)) return "country";
-  // ad-hoc regional codes (US-HHS-1, US-CEN-N, etc.) — multi-segment ISO-2 prefixed
-  if (/^[A-Z]{2}-[A-Z]+-[A-Z0-9]+$/.test(v)) return "subnational-region";
+  // Synthetic / ad-hoc regional codes (US-HHS-1, US-FLUSURV-CA,
+  // US-FLUSURV-NY-ALBANY, BR-IBGE-3550308, …) — multi-segment ISO-2-prefixed.
+  // 3+ segments: previously this was 3-segments-only, which dropped legitimate
+  // 4-segment FluSurv catchments to "unsupported."
+  if (/^[A-Z]{2}-[A-Z]+(?:-[A-Z0-9]+)+$/.test(v)) return "subnational-region";
   if (ISO_3166_2.test(v)) return "iso3166-2";
   if (POINT.test(v)) return "point";
   if (FACILITY.test(v)) return "facility";
@@ -55,8 +58,21 @@ function classifyId(value: string): BoundaryType {
 }
 
 // Boundary types we have polygon data for.
+//
+// `subnational-region` is renderable *if* the synthetic codes in the dataset
+// have entries in `syntheticBoundary.ts` — a synthetic code maps to one or
+// more real boundaries (US state, multi-state highlight, or country fallback)
+// at render time. Codes not in the registry remain effectively unrenderable;
+// the view loader returns null in that case and the country-aggregation
+// fallback (extendWithFallbacks) takes over.
 export function isRenderable(t: BoundaryType): boolean {
-  return t === "country" || t === "us-state" || t === "us-county";
+  return (
+    t === "country" ||
+    t === "us-state" ||
+    t === "us-county" ||
+    t === "iso3166-2" ||
+    t === "subnational-region"
+  );
 }
 
 // Granularity ranking for "default to most granular present" selection. Higher
@@ -131,7 +147,7 @@ const BOUNDARY_LABEL: Record<BoundaryType, string> = {
   country: "Countries",
   "us-state": "US states",
   "us-county": "US counties",
-  "iso3166-2": "ISO 3166-2 subnational (not yet rendered)",
+  "iso3166-2": "ISO 3166-2 subnational",
   "subnational-region": "ad-hoc regions (not rendered)",
   point: "points (not yet rendered)",
   facility: "facilities (not yet rendered)",

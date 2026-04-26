@@ -2,6 +2,8 @@
 // EPI-Eval datasets live under the EPI-Eval org. cardData on /api/datasets is the
 // parsed YAML frontmatter, so we don't need a YAML parser in the browser.
 
+import { withGate } from "./concurrency";
+
 export const EPI_EVAL_ORG = "EPI-Eval";
 
 const HF_API = "https://huggingface.co/api";
@@ -46,9 +48,14 @@ export async function fetchRows(
     offset: String(opts.offset ?? 0),
     length: String(opts.length ?? 100)
   });
-  const res = await fetch(`${HF_DSERVER}/rows?${params.toString()}`, { headers: authHeaders() });
-  if (!res.ok) throw new Error(`HF rows failed: ${res.status} ${res.statusText}`);
-  return res.json();
+  return withGate(async () => {
+    const res = await fetch(`${HF_DSERVER}/rows?${params.toString()}`, { headers: authHeaders() });
+    if (!res.ok) {
+      const detail = res.status === 429 ? " (rate-limited — set VITE_HF_TOKEN in .env for higher limits)" : "";
+      throw new Error(`HF rows failed: ${res.status} ${res.statusText}${detail}`);
+    }
+    return res.json();
+  });
 }
 
 export interface HfSplitsResponse {

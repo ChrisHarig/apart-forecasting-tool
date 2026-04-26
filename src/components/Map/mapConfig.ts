@@ -23,9 +23,9 @@ export const mapColors = {
   ocean: "#0b1422",
   land: "rgba(255, 255, 255, 0.06)",        // baseline land (anything not in scope)
   scopeMissing: "rgba(255, 255, 255, 0.18)", // in scope, no data — a clear gray
-  hasData: "rgba(220, 38, 38, 0.42)",         // data present — saturated red
+  hasData: "rgba(14, 165, 233, 0.42)",        // data present — sky-500
   border: "rgba(255, 255, 255, 0.22)",        // thin land border
-  selectedBorder: "#ef4444"
+  selectedBorder: "#0ea5e9"                   // sky-500
 };
 
 export const mapConfig = {

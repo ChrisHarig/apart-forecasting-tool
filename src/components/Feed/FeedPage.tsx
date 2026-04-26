@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
-import { ArrowUpRight, ChevronDown, ChevronRight, ExternalLink, RefreshCw, Search } from "lucide-react";
+import { ArrowUpRight, ChevronDown, ChevronRight, ExternalLink, Pin, RefreshCw, Search } from "lucide-react";
 import { useDashboard } from "../../state/DashboardContext";
 import { useRecentRows } from "../../data/hf/hooks";
+import { usePinnedDatasets, type PinnedDatasetsApi } from "../../state/usePinnedDatasets";
 import type { RecentRowsResult } from "../../data/hf/rows";
 import type { SourceMetadata } from "../../types/source";
 
@@ -17,18 +18,31 @@ interface FeedPageProps {
 export function FeedPage({ onOpen }: FeedPageProps) {
   const { catalog, refreshCatalog } = useDashboard();
   const [query, setQuery] = useState("");
+  const pin = usePinnedDatasets();
 
   const visibleSources = useMemo(() => {
     if (!catalog.data) return [];
-    if (!query) return catalog.data;
-    const q = query.toLowerCase();
-    return catalog.data.filter((s) =>
-      [s.pretty_name, s.id, s.description ?? "", s.notes_general ?? "", s.pathogens.join(" ")]
-        .join(" ")
-        .toLowerCase()
-        .includes(q)
-    );
-  }, [catalog.data, query]);
+    const filtered = !query
+      ? catalog.data
+      : catalog.data.filter((s) =>
+          [s.pretty_name, s.id, s.description ?? "", s.notes_general ?? "", s.pathogens.join(" ")]
+            .join(" ")
+            .toLowerCase()
+            .includes(query.toLowerCase())
+        );
+    // Pinned first (in pin order), then everyone else in catalog order.
+    if (pin.pinned.length === 0) return filtered;
+    const pinnedSet = new Set(pin.pinned);
+    const pinnedIds = pin.pinned;
+    const indexById = new Map(filtered.map((s, i) => [s.id, i]));
+    const pinnedRows = pinnedIds
+      .map((id) => filtered.find((s) => s.id === id))
+      .filter((s): s is SourceMetadata => Boolean(s));
+    const rest = filtered.filter((s) => !pinnedSet.has(s.id));
+    // Stable order for `rest`: keep catalog order.
+    rest.sort((a, b) => (indexById.get(a.id) ?? 0) - (indexById.get(b.id) ?? 0));
+    return [...pinnedRows, ...rest];
+  }, [catalog.data, query, pin.pinned]);
 
   return (
     <div className="space-y-3 p-3">
@@ -39,7 +53,7 @@ export function FeedPage({ onOpen }: FeedPageProps) {
             href="https://huggingface.co/EPI-Eval"
             target="_blank"
             rel="noreferrer"
-            className="text-xs text-neutral-400 hover:text-red-200"
+            className="text-xs text-neutral-400 hover:text-sky-200"
           >
             huggingface.co/EPI-Eval
           </a>
@@ -52,13 +66,13 @@ export function FeedPage({ onOpen }: FeedPageProps) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search by name, pathogen, geography…"
-            className="w-full rounded-md border border-white/10 bg-white/[0.03] py-1.5 pl-8 pr-3 text-xs text-white placeholder:text-neutral-500 focus:border-red-500 focus:outline-none"
+            className="w-full rounded-md border border-white/10 bg-white/[0.03] py-1.5 pl-8 pr-3 text-xs text-white placeholder:text-neutral-500 focus:border-sky-500 focus:outline-none"
           />
         </div>
         <button
           type="button"
           onClick={refreshCatalog}
-          className="flex items-center gap-1 rounded-md border border-white/15 px-2 py-1 text-xs text-neutral-200 hover:border-red-500 hover:text-red-200"
+          className="flex items-center gap-1 rounded-md border border-white/15 px-2 py-1 text-xs text-neutral-200 hover:border-sky-500 hover:text-sky-200"
           title="Refresh catalog"
         >
           <RefreshCw className="h-3 w-3" /> Refresh
@@ -89,7 +103,7 @@ export function FeedPage({ onOpen }: FeedPageProps) {
       {catalog.status === "ready" && (
         <ul className="space-y-1.5">
           {visibleSources.map((s) => (
-            <DatasetCard key={s.id} source={s} onOpen={onOpen} />
+            <DatasetCard key={s.id} source={s} onOpen={onOpen} pin={pin} />
           ))}
         </ul>
       )}
@@ -100,12 +114,18 @@ export function FeedPage({ onOpen }: FeedPageProps) {
 interface CardProps {
   source: SourceMetadata;
   onOpen: (sourceId: string) => void;
+  pin: PinnedDatasetsApi;
 }
 
-function DatasetCard({ source, onOpen }: CardProps) {
+function DatasetCard({ source, onOpen, pin }: CardProps) {
   const [expanded, setExpanded] = useState(false);
-  const recent = useRecentRows(source.id, 4, source.computed?.row_count);
+  // Only fetch the per-card row preview when the user actually expands the
+  // card. Pre-expansion, the LiveBadge falls through to `time_coverage.end`
+  // from card metadata — no network request needed.
+  const recent = useRecentRows(expanded ? source.id : null, 5, source.computed?.row_count);
   const live = useMemo(() => isLive(source, recent.data), [source, recent.data]);
+  const pinned = pin.isPinned(source.id);
+  const hfDatasetUrl = `https://huggingface.co/datasets/${source.id}`;
 
   const metaPills: string[] = [];
   if (source.cadence) metaPills.push(source.cadence);
@@ -114,7 +134,11 @@ function DatasetCard({ source, onOpen }: CardProps) {
   if (source.geography_countries.length > 0) metaPills.push(source.geography_countries.slice(0, 2).join("·"));
 
   return (
-    <li className="rounded-lg border border-white/10 bg-white/[0.03]">
+    <li
+      className={`rounded-lg border bg-white/[0.03] ${
+        pinned ? "border-sky-500/40 bg-sky-500/[0.04]" : "border-white/10"
+      }`}
+    >
       <div
         role="button"
         tabIndex={0}
@@ -126,34 +150,68 @@ function DatasetCard({ source, onOpen }: CardProps) {
           }
         }}
         aria-expanded={expanded}
-        className="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-3 py-2 transition hover:bg-white/[0.02]"
+        className="flex cursor-pointer items-center gap-x-3 rounded-lg px-3 py-2 transition hover:bg-white/[0.02]"
       >
-        <span className="rounded p-0.5 text-neutral-400" aria-hidden="true">
+        <span className="shrink-0 rounded p-0.5 text-neutral-400" aria-hidden="true">
           {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
         </span>
 
-        <LiveBadge live={live} latestDate={recent.data?.latestDate ?? null} />
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            pin.toggle(source.id);
+          }}
+          className={`shrink-0 rounded p-1 transition ${
+            pinned
+              ? "text-sky-300 hover:text-sky-100"
+              : "text-neutral-500 hover:text-sky-300"
+          }`}
+          title={pinned ? "Unpin from top" : "Pin to top"}
+          aria-pressed={pinned}
+        >
+          {pinned ? <Pin className="h-3.5 w-3.5 fill-current" /> : <Pin className="h-3.5 w-3.5" />}
+        </button>
 
-        <h3 className="truncate text-sm font-semibold text-white" title={source.pretty_name}>
-          {source.pretty_name}
-        </h3>
-        <span className="truncate font-mono text-[10px] text-neutral-500" title={source.id}>
-          {source.id}
-        </span>
+        {/* Title block grows + truncates. items-center keeps the badge and
+            the small id text vertically aligned to the title's mid-line —
+            items-baseline produced a low-sitting badge because the badge's
+            text baseline is below the title's. */}
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <h3 className="truncate text-sm font-semibold text-white" title={source.pretty_name}>
+            {source.pretty_name}
+          </h3>
+          <span className="shrink-0">
+            <LiveBadge live={live} latestDate={recent.data?.latestDate ?? deriveCardEnd(source)} />
+          </span>
+          <span className="hidden truncate font-mono text-[10px] text-neutral-500 sm:inline" title={source.id}>
+            {source.id}
+          </span>
+        </div>
 
         {metaPills.length > 0 && (
-          <span className="hidden text-[11px] text-neutral-400 lg:inline">{metaPills.join(" · ")}</span>
+          <span className="hidden shrink-0 text-[11px] text-neutral-400 lg:inline">{metaPills.join(" · ")}</span>
         )}
 
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1.5">
+          <a
+            href={hfDatasetUrl}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="flex items-center gap-1 rounded-md border border-white/10 px-2 py-0.5 text-[11px] text-neutral-200 hover:border-sky-500 hover:text-sky-200"
+            title={`Open ${source.id} on HuggingFace`}
+          >
+            HF <ExternalLink className="h-3 w-3" />
+          </a>
           {source.source_url && (
             <a
               href={source.source_url}
               target="_blank"
               rel="noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="flex items-center gap-1 rounded-md border border-white/10 px-2 py-0.5 text-[11px] text-neutral-200 hover:border-red-500 hover:text-red-200"
-              title="Open at Huggingface"
+              className="flex items-center gap-1 rounded-md border border-white/10 px-2 py-0.5 text-[11px] text-neutral-200 hover:border-sky-500 hover:text-sky-200"
+              title="Open the upstream source"
             >
               Source <ExternalLink className="h-3 w-3" />
             </a>
@@ -164,7 +222,7 @@ function DatasetCard({ source, onOpen }: CardProps) {
               e.stopPropagation();
               onOpen(source.id);
             }}
-            className="flex items-center gap-1 rounded-md border border-red-500/40 bg-red-700/30 px-2 py-0.5 text-[11px] font-semibold text-red-100 hover:border-red-500/60 hover:bg-red-700/45"
+            className="flex items-center gap-1 rounded-md border border-sky-500/40 bg-sky-700/30 px-2 py-0.5 text-[11px] font-semibold text-sky-100 hover:border-sky-500/60 hover:bg-sky-700/45"
             title="Open in this pane"
           >
             Open data <ArrowUpRight className="h-3 w-3" />
@@ -227,7 +285,10 @@ function RecentObservationsTable({ recent }: { recent: ReturnType<typeof useRece
       <p className="border-b border-white/5 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
         Recent observations
       </p>
-      <div className="overflow-x-auto">
+      {/* Allow horizontal scrolling but suppress the chunky native scrollbar.
+          The min-w-max table forces width; a faint hint at the right edge
+          tells users they can drag/swipe. */}
+      <div className="overflow-x-auto scrollbar-hidden">
         <table className="w-full min-w-max text-xs">
           <thead className="bg-white/[0.03] text-[10px] uppercase text-neutral-500">
             <tr>
@@ -256,24 +317,21 @@ function RecentObservationsTable({ recent }: { recent: ReturnType<typeof useRece
 }
 
 function LiveBadge({ live, latestDate }: { live: "live" | "stale" | "unknown"; latestDate: string | null }) {
-  if (live === "unknown") {
-    return (
-      <span className="rounded-full border border-white/15 bg-white/[0.04] px-2 py-0.5 text-[10px] text-neutral-400">
-        no date
-      </span>
-    );
-  }
-  const dateLabel = latestDate ? ` · ${latestDate.slice(0, 10)}` : "";
-  if (live === "live") {
-    return (
-      <span className="rounded-full border border-emerald-500/40 bg-emerald-700/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-200">
-        Live{dateLabel}
-      </span>
-    );
-  }
+  // No date → no badge at all (the row fetch hasn't given us a date and the
+  // card has no time_coverage to fall back on). Otherwise show just the date,
+  // green for live, sky-blue for stale.
+  if (!latestDate) return null;
+  const dateLabel = latestDate.slice(0, 10);
+  const palette =
+    live === "live"
+      ? "border-emerald-500/40 bg-emerald-700/20 text-emerald-200"
+      : "border-sky-500/40 bg-sky-700/20 text-sky-200";
   return (
-    <span className="rounded-full border border-amber-500/40 bg-amber-700/15 px-2 py-0.5 text-[10px] font-semibold text-amber-200">
-      Stale{dateLabel}
+    <span
+      className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${palette}`}
+      title={live === "live" ? "Live (recent data)" : "Latest observation date"}
+    >
+      {dateLabel}
     </span>
   );
 }
