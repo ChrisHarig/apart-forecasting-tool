@@ -34,6 +34,17 @@ interface ActiveFilter {
 }
 
 const ALL = "__all__";
+const OVERLAY_COLOR = "#f59e0b"; // amber-500 — distinguishable from the sky-toned period palette.
+
+// Optional overlay series: rendered as a single line on top of the period
+// overlay, ignoring period boundaries. Used by the predictions feature to
+// drop a forecast line over historical seasons.
+export interface SeasonalOverlay {
+  rows: DatasetRow[];
+  dateField: string;
+  valueField: string;
+  label: string;
+}
 
 interface Props {
   rows: DatasetRow[];
@@ -42,6 +53,7 @@ interface Props {
   aggMethod: AggregationMethod;
   periodKind: PeriodKind;
   activeFilters: ActiveFilter[];
+  overlay?: SeasonalOverlay;
 }
 
 /**
@@ -56,8 +68,9 @@ export function buildSeasonalChartData(args: {
   aggMethod: AggregationMethod;
   periodKind: PeriodKind;
   activeFilters: ActiveFilter[];
-}): { chartData: Record<string, number>[]; periodIds: string[] } {
-  const { rows, dateField, metric, aggMethod, periodKind, activeFilters } = args;
+  overlay?: SeasonalOverlay;
+}): { chartData: Record<string, number>[]; periodIds: string[]; overlayKey: string | null } {
+  const { rows, dateField, metric, aggMethod, periodKind, activeFilters, overlay } = args;
   const buckets = new Map<number, Map<string, number[]>>();
   const seenPeriods = new Set<string>();
 
@@ -96,6 +109,32 @@ export function buildSeasonalChartData(args: {
     arr.push(value);
   }
 
+  let overlayKey: string | null = null;
+  if (overlay) {
+    overlayKey = overlay.label;
+    for (const row of overlay.rows) {
+      const dateRaw = row[overlay.dateField];
+      if (typeof dateRaw !== "string" || !dateRaw) continue;
+      const d = new Date(dateRaw);
+      if (Number.isNaN(d.getTime())) continue;
+      const valueRaw = row[overlay.valueField];
+      const value = typeof valueRaw === "number" ? valueRaw : Number(valueRaw);
+      if (!Number.isFinite(value)) continue;
+      const { xIndex } = dateToPeriod(d, periodKind);
+      let xMap = buckets.get(xIndex);
+      if (!xMap) {
+        xMap = new Map();
+        buckets.set(xIndex, xMap);
+      }
+      let arr = xMap.get(overlayKey);
+      if (!arr) {
+        arr = [];
+        xMap.set(overlayKey, arr);
+      }
+      arr.push(value);
+    }
+  }
+
   const periodIds = sortPeriodIdsNewestFirst(Array.from(seenPeriods));
   const xs = Array.from(buckets.keys()).sort((a, b) => a - b);
   const chartData = xs.map((x) => {
@@ -105,17 +144,42 @@ export function buildSeasonalChartData(args: {
       const values = xMap.get(pid);
       if (values && values.length > 0) row[pid] = aggregate(values, aggMethod);
     }
+    if (overlayKey) {
+      const values = xMap.get(overlayKey);
+      if (values && values.length > 0) row[overlayKey] = aggregate(values, aggMethod);
+    }
     return row;
   });
 
-  return { chartData, periodIds };
+  return { chartData, periodIds, overlayKey };
 }
 
-export function SeasonalChart({ rows, dateField, metric, aggMethod, periodKind, activeFilters }: Props) {
-  const { chartData, periodIds } = useMemo(() => {
-    if (!dateField || !metric) return { chartData: [], periodIds: [] as string[] };
-    return buildSeasonalChartData({ rows, dateField, metric, aggMethod, periodKind, activeFilters });
-  }, [rows, dateField, metric, aggMethod, periodKind, activeFilters]);
+export function SeasonalChart({
+  rows,
+  dateField,
+  metric,
+  aggMethod,
+  periodKind,
+  activeFilters,
+  overlay
+}: Props) {
+  const { chartData, periodIds, overlayKey } = useMemo(() => {
+    if (!dateField || !metric)
+      return {
+        chartData: [] as Record<string, number>[],
+        periodIds: [] as string[],
+        overlayKey: null as string | null
+      };
+    return buildSeasonalChartData({
+      rows,
+      dateField,
+      metric,
+      aggMethod,
+      periodKind,
+      activeFilters,
+      overlay
+    });
+  }, [rows, dateField, metric, aggMethod, periodKind, activeFilters, overlay]);
 
   if (!metric || !dateField) {
     return (
@@ -176,6 +240,18 @@ export function SeasonalChart({ rows, dateField, metric, aggMethod, periodKind, 
               isAnimationActive={false}
             />
           ))}
+          {overlayKey && (
+            <Line
+              type="monotone"
+              dataKey={overlayKey}
+              stroke={OVERLAY_COLOR}
+              strokeWidth={2.5}
+              strokeDasharray="6 3"
+              dot={false}
+              connectNulls={true}
+              isAnimationActive={false}
+            />
+          )}
         </LineChart>
       </ResponsiveContainer>
     </div>

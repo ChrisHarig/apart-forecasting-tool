@@ -1,48 +1,79 @@
 import { useMemo, useState } from "react";
-import { ArrowUpRight, ChevronDown, ChevronRight, ExternalLink, Pin, RefreshCw, Search } from "lucide-react";
+import {
+  ArrowUpRight,
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
+  Pin,
+  RefreshCw,
+  Search,
+  Trash2
+} from "lucide-react";
 import { useDashboard } from "../../state/DashboardContext";
+import { usePredictions } from "../../state/PredictionsContext";
 import { useRecentRows } from "../../data/hf/hooks";
 import { usePinnedDatasets, type PinnedDatasetsApi } from "../../state/usePinnedDatasets";
-import type { RecentRowsResult } from "../../data/hf/rows";
+import type { DatasetRow, RecentRowsResult } from "../../data/hf/rows";
 import type { SourceMetadata } from "../../types/source";
+import type { UserDataset } from "../../data/predictions/types";
+import { UploadZone } from "../Predictions/UploadZone";
 
 const STALE_THRESHOLD_DAYS = 90;
 
+type FeedItem =
+  | { kind: "user"; dataset: UserDataset }
+  | { kind: "epi"; source: SourceMetadata };
+
 interface FeedPageProps {
-  // Called when the user clicks "Open data" on a card. The host (a browser
-  // pane) decides what to do — typically convert itself to an explorer
-  // pane for this source.
   onOpen: (sourceId: string) => void;
+  onOpenUserDataset: (userDatasetId: string) => void;
 }
 
-export function FeedPage({ onOpen }: FeedPageProps) {
+export function FeedPage({ onOpen, onOpenUserDataset }: FeedPageProps) {
   const { catalog, refreshCatalog } = useDashboard();
+  const { datasets, removeDataset } = usePredictions();
   const [query, setQuery] = useState("");
   const pin = usePinnedDatasets();
 
-  const visibleSources = useMemo(() => {
-    if (!catalog.data) return [];
-    const filtered = !query
-      ? catalog.data
-      : catalog.data.filter((s) =>
-          [s.pretty_name, s.id, s.description ?? "", s.notes_general ?? "", s.pathogens.join(" ")]
-            .join(" ")
-            .toLowerCase()
-            .includes(query.toLowerCase())
+  const visibleItems: FeedItem[] = useMemo(() => {
+    const out: FeedItem[] = [];
+
+    // User datasets first, newest upload first; filterable by filename.
+    const userMatches = !query
+      ? [...datasets]
+      : datasets.filter((d) =>
+          d.filename.toLowerCase().includes(query.toLowerCase())
         );
-    // Pinned first (in pin order), then everyone else in catalog order.
-    if (pin.pinned.length === 0) return filtered;
-    const pinnedSet = new Set(pin.pinned);
-    const pinnedIds = pin.pinned;
-    const indexById = new Map(filtered.map((s, i) => [s.id, i]));
-    const pinnedRows = pinnedIds
-      .map((id) => filtered.find((s) => s.id === id))
-      .filter((s): s is SourceMetadata => Boolean(s));
-    const rest = filtered.filter((s) => !pinnedSet.has(s.id));
-    // Stable order for `rest`: keep catalog order.
-    rest.sort((a, b) => (indexById.get(a.id) ?? 0) - (indexById.get(b.id) ?? 0));
-    return [...pinnedRows, ...rest];
-  }, [catalog.data, query, pin.pinned]);
+    userMatches.sort((a, b) => b.uploadedAt - a.uploadedAt);
+    for (const d of userMatches) out.push({ kind: "user", dataset: d });
+
+    // EPI-Eval next, with the existing pin-first ordering.
+    if (catalog.data) {
+      const filtered = !query
+        ? catalog.data
+        : catalog.data.filter((s) =>
+            [s.pretty_name, s.id, s.description ?? "", s.notes_general ?? "", s.pathogens.join(" ")]
+              .join(" ")
+              .toLowerCase()
+              .includes(query.toLowerCase())
+          );
+      if (pin.pinned.length === 0) {
+        for (const s of filtered) out.push({ kind: "epi", source: s });
+      } else {
+        const pinnedSet = new Set(pin.pinned);
+        const indexById = new Map(filtered.map((s, i) => [s.id, i]));
+        const pinnedRows = pin.pinned
+          .map((id) => filtered.find((s) => s.id === id))
+          .filter((s): s is SourceMetadata => Boolean(s));
+        const rest = filtered.filter((s) => !pinnedSet.has(s.id));
+        rest.sort((a, b) => (indexById.get(a.id) ?? 0) - (indexById.get(b.id) ?? 0));
+        for (const s of pinnedRows) out.push({ kind: "epi", source: s });
+        for (const s of rest) out.push({ kind: "epi", source: s });
+      }
+    }
+
+    return out;
+  }, [catalog.data, query, pin.pinned, datasets]);
 
   return (
     <div className="space-y-3 p-3">
@@ -57,7 +88,12 @@ export function FeedPage({ onOpen }: FeedPageProps) {
           >
             huggingface.co/EPI-Eval
           </a>
-          {catalog.data && <span className="text-xs text-neutral-500">· {catalog.data.length}</span>}
+          {catalog.data && (
+            <span className="text-xs text-neutral-500">· {catalog.data.length}</span>
+          )}
+          {datasets.length > 0 && (
+            <span className="text-xs text-amber-300">· {datasets.length} mine</span>
+          )}
         </div>
         <div className="relative ml-auto min-w-[220px] flex-1 max-w-md">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-neutral-500" />
@@ -69,6 +105,7 @@ export function FeedPage({ onOpen }: FeedPageProps) {
             className="w-full rounded-md border border-white/10 bg-white/[0.03] py-1.5 pl-8 pr-3 text-xs text-white placeholder:text-neutral-500 focus:border-sky-500 focus:outline-none"
           />
         </div>
+        <UploadZone onUploaded={onOpenUserDataset} />
         <button
           type="button"
           onClick={refreshCatalog}
@@ -94,17 +131,31 @@ export function FeedPage({ onOpen }: FeedPageProps) {
         </div>
       )}
 
-      {catalog.status === "ready" && visibleSources.length === 0 && (
+      {visibleItems.length === 0 && catalog.status === "ready" && (
         <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm text-neutral-300">
           No datasets match.
         </div>
       )}
 
-      {catalog.status === "ready" && (
+      {visibleItems.length > 0 && (
         <ul className="space-y-1.5">
-          {visibleSources.map((s) => (
-            <DatasetCard key={s.id} source={s} onOpen={onOpen} pin={pin} />
-          ))}
+          {visibleItems.map((item) =>
+            item.kind === "user" ? (
+              <UserDatasetCard
+                key={item.dataset.id}
+                dataset={item.dataset}
+                onOpen={onOpenUserDataset}
+                onRemove={removeDataset}
+              />
+            ) : (
+              <DatasetCard
+                key={item.source.id}
+                source={item.source}
+                onOpen={onOpen}
+                pin={pin}
+              />
+            )
+          )}
         </ul>
       )}
     </div>
@@ -173,10 +224,6 @@ function DatasetCard({ source, onOpen, pin }: CardProps) {
           {pinned ? <Pin className="h-3.5 w-3.5 fill-current" /> : <Pin className="h-3.5 w-3.5" />}
         </button>
 
-        {/* Title block grows + truncates. items-center keeps the badge and
-            the small id text vertically aligned to the title's mid-line —
-            items-baseline produced a low-sitting badge because the badge's
-            text baseline is below the title's. */}
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <h3 className="truncate text-sm font-semibold text-white" title={source.pretty_name}>
             {source.pretty_name}
@@ -252,6 +299,147 @@ function DatasetCard({ source, onOpen, pin }: CardProps) {
   );
 }
 
+interface UserCardProps {
+  dataset: UserDataset;
+  onOpen: (id: string) => void;
+  onRemove: (id: string) => void;
+}
+
+function UserDatasetCard({ dataset, onOpen, onRemove }: UserCardProps) {
+  const [expanded, setExpanded] = useState(false);
+  const previewRows = dataset.rows.slice(0, 5);
+  const previewColumns = useMemo(() => {
+    const seen = new Set<string>();
+    const cols: string[] = [];
+    for (const r of previewRows) for (const k of Object.keys(r)) if (!seen.has(k)) (seen.add(k), cols.push(k));
+    return cols;
+  }, [previewRows]);
+
+  return (
+    <li className="rounded-lg border border-amber-500/30 bg-amber-500/[0.03]">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => setExpanded((v) => !v)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setExpanded((v) => !v);
+          }
+        }}
+        aria-expanded={expanded}
+        className="flex cursor-pointer items-center gap-x-3 rounded-lg px-3 py-2 transition hover:bg-white/[0.02]"
+      >
+        <span className="shrink-0 rounded p-0.5 text-neutral-400" aria-hidden="true">
+          {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+        </span>
+
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <h3 className="truncate text-sm font-semibold text-white" title={dataset.filename}>
+            {dataset.filename}
+          </h3>
+          <span className="shrink-0 rounded-full border border-amber-500/40 bg-amber-700/20 px-2 py-0.5 text-[10px] font-semibold text-amber-100">
+            Personal
+          </span>
+          <span className="hidden truncate font-mono text-[10px] text-neutral-500 sm:inline">
+            {dataset.rowCount.toLocaleString()} rows · uploaded{" "}
+            {new Date(dataset.uploadedAt).toLocaleTimeString(undefined, {
+              hour: "numeric",
+              minute: "2-digit"
+            })}
+          </span>
+        </div>
+
+        <span className="hidden shrink-0 text-[11px] text-neutral-400 lg:inline">
+          {dataset.numericFields.length} numeric
+          {dataset.quantileField && " · quantile"}
+        </span>
+
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove(dataset.id);
+            }}
+            className="rounded p-1 text-neutral-500 transition hover:bg-white/10 hover:text-red-300"
+            title="Remove"
+            aria-label={`Remove ${dataset.filename}`}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpen(dataset.id);
+            }}
+            className="flex items-center gap-1 rounded-md border border-sky-500/40 bg-sky-700/30 px-2 py-0.5 text-[11px] font-semibold text-sky-100 hover:border-sky-500/60 hover:bg-sky-700/45"
+            title="Open in this pane"
+          >
+            Open <ArrowUpRight className="h-3 w-3" />
+          </button>
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="border-t border-white/10 px-4 py-3">
+          <div className="mt-1 flex flex-wrap gap-1.5 text-[10px] text-neutral-300">
+            <Tag>date: {dataset.dateField}</Tag>
+            {dataset.numericFields.slice(0, 4).map((f) => (
+              <Tag key={f}>numeric: {f}</Tag>
+            ))}
+          </div>
+          <div className="mt-3">
+            <PreviewRowsTable rows={previewRows} columns={previewColumns} />
+          </div>
+        </div>
+      )}
+    </li>
+  );
+}
+
+function PreviewRowsTable({ rows, columns }: { rows: DatasetRow[]; columns: string[] }) {
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-md border border-white/5 bg-black/30 px-3 py-2 text-xs text-neutral-500">
+        No rows.
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-md border border-white/10 bg-black/40">
+      <p className="border-b border-white/5 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
+        First {rows.length} rows
+      </p>
+      <div className="overflow-x-auto scrollbar-hidden">
+        <table className="w-full min-w-max text-xs">
+          <thead className="bg-white/[0.03] text-[10px] uppercase text-neutral-500">
+            <tr>
+              {columns.map((k) => (
+                <th key={k} className="whitespace-nowrap px-3 py-1.5 text-left font-semibold">
+                  {k}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {rows.map((row, i) => (
+              <tr key={i}>
+                {columns.map((k) => (
+                  <td key={k} className="whitespace-nowrap px-3 py-2 text-neutral-200">
+                    {formatCell(row[k])}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function RecentObservationsTable({ recent }: { recent: ReturnType<typeof useRecentRows> }) {
   if (recent.status === "loading") {
     return (
@@ -285,9 +473,6 @@ function RecentObservationsTable({ recent }: { recent: ReturnType<typeof useRece
       <p className="border-b border-white/5 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
         Recent observations
       </p>
-      {/* Allow horizontal scrolling but suppress the chunky native scrollbar.
-          The min-w-max table forces width; a faint hint at the right edge
-          tells users they can drag/swipe. */}
       <div className="overflow-x-auto scrollbar-hidden">
         <table className="w-full min-w-max text-xs">
           <thead className="bg-white/[0.03] text-[10px] uppercase text-neutral-500">
@@ -317,9 +502,6 @@ function RecentObservationsTable({ recent }: { recent: ReturnType<typeof useRece
 }
 
 function LiveBadge({ live, latestDate }: { live: "live" | "stale" | "unknown"; latestDate: string | null }) {
-  // No date → no badge at all (the row fetch hasn't given us a date and the
-  // card has no time_coverage to fall back on). Otherwise show just the date,
-  // green for live, sky-blue for stale.
   if (!latestDate) return null;
   const dateLabel = latestDate.slice(0, 10);
   const palette =

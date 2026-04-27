@@ -56,7 +56,19 @@ export interface ExplorerPane {
   showTable: boolean;
 }
 
-export type Pane = BrowserPane | ExplorerPane;
+// User-uploaded prediction (or plain dataset). `targetSourceId === null`
+// is the view-only mode — the user just wants to see their data. When set,
+// the pane compares against that EPI-Eval dataset's `targetColumn`.
+export interface UserDatasetPane {
+  id: string;
+  type: "user-dataset";
+  userDatasetId: string;
+  targetSourceId: string | null;
+  targetColumn: string | null;
+  showTable: boolean;
+}
+
+export type Pane = BrowserPane | ExplorerPane | UserDatasetPane;
 
 export interface WorkspaceState {
   panes: Pane[]; // length 1..MAX_PANES, never 0
@@ -103,6 +115,20 @@ export function makeExplorerPane(sourceId: string, opts: { id?: string } = {}): 
   };
 }
 
+export function makeUserDatasetPane(
+  userDatasetId: string,
+  opts: { id?: string } = {}
+): UserDatasetPane {
+  return {
+    id: opts.id ?? generatePaneId(),
+    type: "user-dataset",
+    userDatasetId,
+    targetSourceId: null,
+    targetColumn: null,
+    showTable: true
+  };
+}
+
 // ─── Persistence ──────────────────────────────────────────────────────────
 
 function isPane(value: unknown): value is Pane {
@@ -112,6 +138,9 @@ function isPane(value: unknown): value is Pane {
   if (v.type === "browser") return typeof v.query === "string";
   if (v.type === "explorer") {
     return typeof v.sourceId === "string" && (v.tab === "graph" || v.tab === "map");
+  }
+  if (v.type === "user-dataset") {
+    return typeof v.userDatasetId === "string";
   }
   return false;
 }
@@ -165,6 +194,10 @@ interface WorkspaceContextValue {
   // pane transforms in place) — and also when something else wants to
   // promote a brand-new explorer (we'll add a new pane in that case).
   openExplorerInPane: (paneId: string, sourceId: string) => void;
+
+  // Converts a pane to a user-dataset view for the given uploaded dataset.
+  // Same in-place transform as openExplorerInPane.
+  openUserDatasetInPane: (paneId: string, userDatasetId: string) => void;
 
   // Convenience: given a sourceId, either convert the focused browser
   // pane (if there is one) or append a new explorer pane.
@@ -222,6 +255,18 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const openUserDatasetInPane = useCallback((paneId: string, userDatasetId: string) => {
+    setState((curr) => {
+      if (!curr.panes.some((p) => p.id === paneId)) return curr;
+      return {
+        panes: curr.panes.map((p) =>
+          p.id === paneId ? makeUserDatasetPane(userDatasetId, { id: paneId }) : p
+        ),
+        focusedPaneId: paneId
+      };
+    });
+  }, []);
+
   const openExplorer = useCallback((sourceId: string) => {
     setState((curr) => {
       // If the focused pane is a browser, transform it in place.
@@ -263,6 +308,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     addBrowserPane,
     closePane,
     openExplorerInPane,
+    openUserDatasetInPane,
     openExplorer,
     focusPane,
     updatePane,
