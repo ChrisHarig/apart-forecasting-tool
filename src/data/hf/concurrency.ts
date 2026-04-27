@@ -32,7 +32,12 @@ const HAS_TOKEN = Boolean((import.meta.env.VITE_HF_TOKEN as string | undefined)?
 const MAX_INFLIGHT = HAS_TOKEN ? 3 : 1;
 const MAX_RETRIES = 3;
 const BASE_BACKOFF_MS = 300;
-const MIN_SPACING_MS = 75;
+// Bumped 75 → 200 (2026-04-27) alongside the MAX_ROWS reduction. Prior
+// pacing was tight enough that sustained pagination still tripped the
+// per-IP rate limit on bigger datasets. With MAX_ROWS=3k we paginate ≤30
+// pages/dataset; 200ms × 30 = 6s of background load, well under the
+// burst threshold.
+const MIN_SPACING_MS = 200;
 
 let active = 0;
 let lastStartTs = 0;

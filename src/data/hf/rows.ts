@@ -19,13 +19,16 @@ export interface RecentRowsResult {
 }
 
 const PAGE_SIZE = 100;
-// Bumped from 5,000 → 10,000 so medium-sized datasets (delphi-flusurv at 9.3k,
-// canada-fluwatch at 2.7k, ukhsa-respiratory at 1.3k) come down complete.
-// Larger datasets (nyt-covid 2.5M, jhu-csse-covid 225k, …) still get truncated
-// to the first 10k rows in chronological order — known-biased toward early
-// data, follow-up TODO is stratified sampling. The truncation indicator in
-// the UI tells the user when this is happening.
-const MAX_ROWS = 10_000;
+// Lowered from 10_000 → 3_000 (2026-04-27): the prior cap was paginating
+// nhsn-hrd into 100 page-fetches, which sustained CloudFront's per-IP rate
+// limit long enough that the last few requests were getting block-page
+// responses (surfaced in the browser as CORS errors because Cloudflare's
+// block doesn't carry CORS headers). Fewer rows means fewer requests means
+// well under the burst threshold. 3k points is also past where Recharts
+// renders smoothly. Datasets larger than 3k are truncated — a known-biased
+// toward early data; follow-ups are (a) stratified sampling, (b) fetching
+// the parquet file directly via hyparquet (one GET, no pagination).
+const MAX_ROWS = 3_000;
 const LATEST_TAIL = 100;
 const DEFAULT_RECENT_N = 4;
 
