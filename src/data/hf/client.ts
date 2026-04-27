@@ -23,11 +23,13 @@ export interface HfDatasetInfo {
 }
 
 export async function listOrgDatasets(org = EPI_EVAL_ORG): Promise<HfDatasetInfo[]> {
-  const res = await fetch(`${HF_API}/datasets?author=${encodeURIComponent(org)}&full=true`, {
-    headers: authHeaders()
+  return withGate(async () => {
+    const res = await fetch(`${HF_API}/datasets?author=${encodeURIComponent(org)}&full=true`, {
+      headers: authHeaders()
+    });
+    if (!res.ok) throw new Error(`HF list datasets failed: ${res.status} ${res.statusText}`);
+    return res.json();
   });
-  if (!res.ok) throw new Error(`HF list datasets failed: ${res.status} ${res.statusText}`);
-  return res.json();
 }
 
 export interface HfRowsResponse {
@@ -64,9 +66,11 @@ export interface HfSplitsResponse {
 
 export async function fetchSplits(datasetId: string): Promise<HfSplitsResponse> {
   const params = new URLSearchParams({ dataset: datasetId });
-  const res = await fetch(`${HF_DSERVER}/splits?${params.toString()}`, { headers: authHeaders() });
-  if (!res.ok) throw new Error(`HF splits failed: ${res.status} ${res.statusText}`);
-  return res.json();
+  return withGate(async () => {
+    const res = await fetch(`${HF_DSERVER}/splits?${params.toString()}`, { headers: authHeaders() });
+    if (!res.ok) throw new Error(`HF splits failed: ${res.status} ${res.statusText}`);
+    return res.json();
+  });
 }
 
 export function hasHfToken(): boolean {

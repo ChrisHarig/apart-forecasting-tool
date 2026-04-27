@@ -1,21 +1,80 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ListFilter, Plus, X } from "lucide-react";
-import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipProps } from "recharts";
+import {
+  Area,
+  CartesianGrid,
+  ComposedChart,
+  Legend,
+  Line,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+  type TooltipProps
+} from "recharts";
 import { detectCategoricalFields, detectDateField, detectNumericFields, type DatasetRow } from "../../data/hf/rows";
 import { aggregate, aggregationLabel, pickAggregation, type AggregationMethod } from "../../data/aggregation";
 import { BUILTIN_PERIOD_KINDS, periodKindLabel, type PeriodKind } from "../../data/periods";
 import type { SourceMetadata, ValueColumn } from "../../types/source";
 import { SeasonalChart } from "./SeasonalChart";
+import type { ParsedPredictions } from "../../data/predictions/companion";
+
+const PREDICTION_SERIES_PREFIX = "pred:";
+const PREDICTION_BAND_PREFIX = "band80:";
+
+// Distinct from the truth/split-by palette so a prediction line never
+// collides with a truth series at a glance. Warm-leaning colors paired
+// with a dashed stroke read clearly as "forecast" against the cool truth
+// series the chart already uses.
+const PREDICTION_COLORS = [
+  "#fbbf24", // amber-400
+  "#f472b6", // pink-400
+  "#a78bfa", // violet-400
+  "#fb923c", // orange-400
+  "#34d399"  // emerald-400 (lighter)
+];
+
+export function predictionColorFor(submitters: string[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  const sorted = [...submitters].sort();
+  for (let i = 0; i < sorted.length; i++) {
+    out[sorted[i]] = PREDICTION_COLORS[i % PREDICTION_COLORS.length];
+  }
+  return out;
+}
+
+export interface PredictionsOverlay {
+  parsed: ParsedPredictions;
+  selectedSubmitters: Set<string>;
+  colorBySubmitter: Record<string, string>;
+}
 
 interface Props {
   source: SourceMetadata;
   rows: DatasetRow[];
+  predictions?: PredictionsOverlay;
+  /**
+   * Currently selected metric (Y-axis column). Controlled — parent owns
+   * the state. Pass `null` to defer until the chart proposes a default
+   * via `onMetricChange`.
+   */
+  metric: string | null;
+  onMetricChange: (metric: string | null) => void;
+  /** Active categorical filters. Controlled. */
+  activeFilters: ActiveFilter[];
+  onActiveFiltersChange: (filters: ActiveFilter[]) => void;
 }
 
-const ALL = "__all__";
+export const ALL_FILTER = "__all__";
+const ALL = ALL_FILTER;
 const NO_GROUP = "__none__";
 const ROW_LEVEL_NON_FILTERS = ["location_id_native", "location_name", "as_of"];
 const TOP_N_DEFAULT = 8;
+
+export interface ActiveFilter {
+  name: string;
+  value: string;
+}
 
 // Distinct enough at small sizes; cycles for >8 groups.
 const SERIES_COLORS = [
@@ -31,12 +90,15 @@ const SERIES_COLORS = [
 
 const SINGLE_SERIES_KEY = "All";
 
-interface ActiveFilter {
-  name: string;
-  value: string;
-}
-
-export function SourceTimelineChart({ source, rows }: Props) {
+export function SourceTimelineChart({
+  source,
+  rows,
+  predictions,
+  metric,
+  onMetricChange,
+  activeFilters,
+  onActiveFiltersChange
+}: Props) {
   const dateField = useMemo(() => detectDateField(rows), [rows]);
 
   const declaredNumeric = source.value_columns
@@ -59,11 +121,13 @@ export function SourceTimelineChart({ source, rows }: Props) {
     [rows, dateField, numericFields]
   );
 
-  const [metric, setMetric] = useState<string | null>(null);
+  // Default-metric proposal: when parent passes `metric=null`, propose the
+  // first numeric field. We don't repair "metric set to a column not in
+  // numericFields" — parent may be pinning to a known column we haven't
+  // detected yet (e.g. the predictions overlay's target_column).
   useEffect(() => {
-    if (metric === null && numericFields.length > 0) setMetric(numericFields[0]);
-    else if (metric !== null && !numericFields.includes(metric)) setMetric(numericFields[0] ?? null);
-  }, [metric, numericFields]);
+    if (metric === null && numericFields.length > 0) onMetricChange(numericFields[0]);
+  }, [metric, numericFields, onMetricChange]);
 
   const [groupBy, setGroupBy] = useState<string>(NO_GROUP);
   // Drop group-by if its column disappears.
@@ -73,8 +137,6 @@ export function SourceTimelineChart({ source, rows }: Props) {
     }
   }, [categoricalFields, groupBy]);
 
-  const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
-
   // Chart mode: time series (default) or seasonal (year-over-year overlay).
   // Persisted only in component state for v1; promoting to pane state lives
   // in FOLLOW_UPS #2's "what can be deferred" list.
@@ -82,27 +144,38 @@ export function SourceTimelineChart({ source, rows }: Props) {
   const [periodKindIdx, setPeriodKindIdx] = useState<number>(0); // index into BUILTIN_PERIOD_KINDS
   const periodKind = BUILTIN_PERIOD_KINDS[periodKindIdx];
 
-  const initRef = useRef(false);
+  // First-time filter seed: when categoricalFields first arrive and parent
+  // hasn't supplied any filters, default to a `location_id = ALL` filter
+  // if that column exists. Mirrors the previous internal behavior.
+  const initFilterRef = useRef(false);
   useEffect(() => {
-    if (initRef.current || categoricalFields.length === 0) return;
-    initRef.current = true;
-    if (categoricalFields.some((f) => f.name === "location_id")) {
-      setActiveFilters([{ name: "location_id", value: ALL }]);
+    if (initFilterRef.current) return;
+    if (categoricalFields.length === 0) return;
+    if (activeFilters.length > 0) {
+      initFilterRef.current = true;
+      return;
     }
-  }, [categoricalFields]);
+    initFilterRef.current = true;
+    if (categoricalFields.some((f) => f.name === "location_id")) {
+      onActiveFiltersChange([{ name: "location_id", value: ALL }]);
+    }
+  }, [categoricalFields, activeFilters, onActiveFiltersChange]);
 
+  // Repair filters when the categorical schema changes (drop missing
+  // columns, coerce stale values to ALL).
   useEffect(() => {
-    setActiveFilters((curr) => {
-      const next = curr
-        .filter((f) => categoricalFields.some((ff) => ff.name === f.name))
-        .map((f) => {
-          const field = categoricalFields.find((ff) => ff.name === f.name)!;
-          if (f.value === ALL || field.values.includes(f.value)) return f;
-          return { ...f, value: ALL };
-        });
-      return next.length === curr.length && next.every((f, i) => f.value === curr[i].value) ? curr : next;
-    });
-  }, [categoricalFields]);
+    const next = activeFilters
+      .filter((f) => categoricalFields.some((ff) => ff.name === f.name))
+      .map((f) => {
+        const field = categoricalFields.find((ff) => ff.name === f.name)!;
+        if (f.value === ALL || field.values.includes(f.value)) return f;
+        return { ...f, value: ALL };
+      });
+    const changed =
+      next.length !== activeFilters.length ||
+      next.some((f, i) => f.value !== activeFilters[i].value);
+    if (changed) onActiveFiltersChange(next);
+  }, [categoricalFields, activeFilters, onActiveFiltersChange]);
 
   const availableForAdd = useMemo(
     () => categoricalFields.filter((f) => !activeFilters.some((af) => af.name === f.name)),
@@ -111,12 +184,13 @@ export function SourceTimelineChart({ source, rows }: Props) {
 
   const addFilter = (name: string) => {
     if (!categoricalFields.some((f) => f.name === name)) return;
-    setActiveFilters((curr) => (curr.some((f) => f.name === name) ? curr : [...curr, { name, value: ALL }]));
+    if (activeFilters.some((f) => f.name === name)) return;
+    onActiveFiltersChange([...activeFilters, { name, value: ALL }]);
   };
   const removeFilter = (name: string) =>
-    setActiveFilters((curr) => curr.filter((f) => f.name !== name));
+    onActiveFiltersChange(activeFilters.filter((f) => f.name !== name));
   const setFilterValue = (name: string, value: string) =>
-    setActiveFilters((curr) => curr.map((f) => (f.name === name ? { ...f, value } : f)));
+    onActiveFiltersChange(activeFilters.map((f) => (f.name === name ? { ...f, value } : f)));
 
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -141,13 +215,16 @@ export function SourceTimelineChart({ source, rows }: Props) {
 
   // Aggregate matching rows by (groupKey, date) using the column's declared
   // aggregation — single line by default, multiple lines when groupBy is set.
-  const { chartData, groupKeys, colorByGroup, groupTotals } = useMemo(() => {
+  // When `predictions` is supplied, also folds per-submitter point estimates
+  // into the same chartData under `pred:<submitter>` keys.
+  const { chartData, groupKeys, colorByGroup, groupTotals, renderedPredictionSubmitters } = useMemo(() => {
     if (!dateField || !metric)
       return {
         chartData: [],
         groupKeys: [] as string[],
         colorByGroup: {} as Record<string, string>,
-        groupTotals: new Map<string, number>()
+        groupTotals: new Map<string, number>(),
+        renderedPredictionSubmitters: [] as string[]
       };
 
     const buckets = new Map<string, Map<string, number[]>>(); // groupKey → date → values
@@ -186,13 +263,63 @@ export function SourceTimelineChart({ source, rows }: Props) {
       allDates.add(date);
     }
 
+    // Predictions overlay: gather point estimates and 80% interval bounds
+    // (quantile 0.1 / 0.9) per (submitter, date) for selected submitters.
+    // Loose dim filter — a prediction passes if every active truth filter
+    // value appears somewhere in the row's dim columns. Slice C will
+    // replace this with explicit dim mapping at the pane level.
+    const predPointBuckets = new Map<string, Map<string, number[]>>();
+    const predLowerBuckets = new Map<string, Map<string, number[]>>();
+    const predUpperBuckets = new Map<string, Map<string, number[]>>();
+    if (predictions && predictions.selectedSubmitters.size > 0) {
+      const explicitFilterValues = activeFilters
+        .filter((f) => f.value !== ALL)
+        .map((f) => f.value);
+      const pushBucket = (
+        bucket: Map<string, Map<string, number[]>>,
+        submitter: string,
+        date: string,
+        v: number
+      ) => {
+        let bySubmitter = bucket.get(submitter);
+        if (!bySubmitter) {
+          bySubmitter = new Map();
+          bucket.set(submitter, bySubmitter);
+        }
+        let arr = bySubmitter.get(date);
+        if (!arr) {
+          arr = [];
+          bySubmitter.set(date, arr);
+        }
+        arr.push(v);
+      };
+      for (const pr of predictions.parsed.rows) {
+        if (!predictions.selectedSubmitters.has(pr.submitter)) continue;
+        if (explicitFilterValues.length > 0) {
+          const dimValues = Object.values(pr.dims);
+          const matches = explicitFilterValues.every((v) => dimValues.includes(v));
+          if (!matches) continue;
+        }
+        if (pr.quantile === null) {
+          pushBucket(predPointBuckets, pr.submitter, pr.date, pr.value);
+        } else if (Math.abs(pr.quantile - 0.1) < 1e-3) {
+          pushBucket(predLowerBuckets, pr.submitter, pr.date, pr.value);
+        } else if (Math.abs(pr.quantile - 0.9) < 1e-3) {
+          pushBucket(predUpperBuckets, pr.submitter, pr.date, pr.value);
+        }
+        allDates.add(pr.date);
+      }
+    }
+
     const groupKeys = Array.from(buckets.keys()).sort();
+    const renderedPredictionSubmitters = Array.from(predPointBuckets.keys()).sort();
     const sortedDates = Array.from(allDates).sort();
+    const mean = (arr: number[]): number => arr.reduce((a, b) => a + b, 0) / arr.length;
 
     // Aggregate per (group, date) and accumulate per-group totals for ranking.
     const groupTotals = new Map<string, number>();
     const chartData = sortedDates.map((date) => {
-      const out: Record<string, string | number | null> = { date };
+      const out: Record<string, string | number | [number, number] | null> = { date };
       for (const groupKey of groupKeys) {
         const values = buckets.get(groupKey)?.get(date);
         if (values && values.length > 0) {
@@ -202,6 +329,22 @@ export function SourceTimelineChart({ source, rows }: Props) {
         } else {
           out[groupKey] = null;
         }
+      }
+      // Predictions: mean across multiple model runs for the same submitter
+      // on the same date (most submitters will have exactly one).
+      for (const submitter of renderedPredictionSubmitters) {
+        const points = predPointBuckets.get(submitter)?.get(date);
+        const lowers = predLowerBuckets.get(submitter)?.get(date);
+        const uppers = predUpperBuckets.get(submitter)?.get(date);
+        out[`${PREDICTION_SERIES_PREFIX}${submitter}`] =
+          points && points.length > 0 ? mean(points) : null;
+        // 80% interval as a [lower, upper] tuple — recharts Area renders
+        // this natively when the dataKey returns a 2-element array.
+        const band: [number, number] | null =
+          lowers && lowers.length > 0 && uppers && uppers.length > 0
+            ? [mean(lowers), mean(uppers)]
+            : null;
+        out[`${PREDICTION_BAND_PREFIX}${submitter}`] = band;
       }
       return out;
     });
@@ -216,8 +359,8 @@ export function SourceTimelineChart({ source, rows }: Props) {
         colorByGroup[groupKeys[i]] = SERIES_COLORS[i % SERIES_COLORS.length];
       }
     }
-    return { chartData, groupKeys, colorByGroup, groupTotals };
-  }, [rows, dateField, metric, activeFilters, groupBy, aggMethod]);
+    return { chartData, groupKeys, colorByGroup, groupTotals, renderedPredictionSubmitters };
+  }, [rows, dateField, metric, activeFilters, groupBy, aggMethod, predictions]);
 
   // Visible-series state. When the group-by axis changes, default to the top
   // TOP_N_DEFAULT groups by total value so we don't drown the chart in lines.
@@ -281,7 +424,9 @@ export function SourceTimelineChart({ source, rows }: Props) {
   if (!dateField) return <Empty body="No date column detected on this dataset." />;
   if (numericFields.length === 0) return <Empty body="No numeric metrics declared or detected." />;
 
-  const showLegend = groupBy !== NO_GROUP && renderedGroupKeys.length > 1;
+  const showLegend =
+    (groupBy !== NO_GROUP && renderedGroupKeys.length > 1) ||
+    renderedPredictionSubmitters.length > 0;
   const aggLabel = aggregationLabel(aggMethod, valueColumnMeta?.aggregation);
   const seriesPickerActive = groupBy !== NO_GROUP && groupKeys.length > TOP_N_DEFAULT;
 
@@ -346,14 +491,26 @@ export function SourceTimelineChart({ source, rows }: Props) {
           <span className="text-[10px] font-semibold uppercase text-neutral-400">Metric (Y axis)</span>
           <select
             value={metric ?? ""}
-            onChange={(e) => setMetric(e.target.value)}
-            className="rounded-md border border-white/10 bg-black/60 px-2 py-1 text-white"
+            onChange={(e) => onMetricChange(e.target.value)}
+            disabled={Boolean(predictions)}
+            title={
+              predictions
+                ? "Pinned to the predictions' target column while the overlay is on"
+                : undefined
+            }
+            className="rounded-md border border-white/10 bg-black/60 px-2 py-1 text-white disabled:cursor-not-allowed disabled:opacity-70"
           >
             {numericFields.map((f) => (
               <option key={f} value={f}>
                 {f}
               </option>
             ))}
+            {/* If the parent pinned to a column outside numericFields
+                (e.g. predictions targeting an undeclared column), include
+                it in the option list so the select displays it. */}
+            {metric && !numericFields.includes(metric) && (
+              <option value={metric}>{metric}</option>
+            )}
           </select>
           <div className="mt-auto flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-neutral-400">
             {valueColumnMeta?.unit && (
@@ -539,12 +696,18 @@ export function SourceTimelineChart({ source, rows }: Props) {
       ) : (
         <div className="h-[400px] rounded-lg border border-white/10 bg-neutral-950 p-3">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 12, right: 18, bottom: 8, left: 0 }}>
+            <ComposedChart data={chartData} margin={{ top: 12, right: 18, bottom: 8, left: 0 }}>
               <CartesianGrid stroke="#262626" vertical={false} />
               <XAxis dataKey="date" tick={{ fill: "#a3a3a3", fontSize: 12 }} minTickGap={28} stroke="#404040" />
               <YAxis tick={{ fill: "#a3a3a3", fontSize: 12 }} stroke="#404040" />
               <Tooltip
-                content={<HoverCard groupKeys={renderedGroupKeys} colorByGroup={colorByGroup} />}
+                content={
+                  <HoverCard
+                    groupKeys={renderedGroupKeys}
+                    colorByGroup={colorByGroup}
+                    predictionColors={predictions?.colorBySubmitter ?? {}}
+                  />
+                }
                 cursor={{ stroke: "#525252", strokeWidth: 1 }}
               />
               {showLegend && (
@@ -566,7 +729,35 @@ export function SourceTimelineChart({ source, rows }: Props) {
                   isAnimationActive={false}
                 />
               ))}
-            </LineChart>
+              {renderedPredictionSubmitters.map((submitter) => (
+                <Area
+                  key={`${PREDICTION_BAND_PREFIX}${submitter}`}
+                  dataKey={`${PREDICTION_BAND_PREFIX}${submitter}`}
+                  name={`${submitter} 80%`}
+                  legendType="none"
+                  stroke="none"
+                  fill={predictions?.colorBySubmitter[submitter] ?? "#fbbf24"}
+                  fillOpacity={0.18}
+                  isAnimationActive={false}
+                  connectNulls
+                />
+              ))}
+              {renderedPredictionSubmitters.map((submitter) => (
+                <Line
+                  key={`${PREDICTION_SERIES_PREFIX}${submitter}`}
+                  type="monotone"
+                  dataKey={`${PREDICTION_SERIES_PREFIX}${submitter}`}
+                  name={`${submitter} (forecast)`}
+                  stroke={predictions?.colorBySubmitter[submitter] ?? "#fbbf24"}
+                  strokeWidth={1.8}
+                  strokeDasharray="6 3"
+                  dot={false}
+                  activeDot={{ r: 3 }}
+                  connectNulls
+                  isAnimationActive={false}
+                />
+              ))}
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
       )}
@@ -655,13 +846,32 @@ function SeriesPicker({ groupKeys, groupTotals, visibleSet, colorByGroup, onTogg
 function HoverCard({
   groupKeys,
   colorByGroup,
+  predictionColors,
   active,
   payload,
   label
-}: TooltipProps<number, string> & { groupKeys: string[]; colorByGroup: Record<string, string> }) {
+}: TooltipProps<number, string> & {
+  groupKeys: string[];
+  colorByGroup: Record<string, string>;
+  predictionColors: Record<string, string>;
+}) {
   if (!active || !payload?.length) return null;
-  const sorted = [...payload].sort((a, b) => Number(b.value ?? 0) - Number(a.value ?? 0));
+  // Filter to entries we want to display: skip band tuples (formatted as
+  // a "(80% interval)" suffix on the corresponding point line instead of
+  // their own tooltip row).
+  const displayable = payload.filter((p) => !String(p.dataKey).startsWith(PREDICTION_BAND_PREFIX));
+  const sorted = [...displayable].sort((a, b) => Number(b.value ?? 0) - Number(a.value ?? 0));
   const showSeriesName = groupKeys.length > 1 || (groupKeys[0] && groupKeys[0] !== "All");
+  // Lookup band tuple for each prediction submitter for inline display.
+  const bandsBySubmitter = new Map<string, [number, number]>();
+  for (const p of payload) {
+    const key = String(p.dataKey);
+    if (!key.startsWith(PREDICTION_BAND_PREFIX)) continue;
+    const v = p.value as unknown;
+    if (Array.isArray(v) && v.length === 2 && typeof v[0] === "number" && typeof v[1] === "number") {
+      bandsBySubmitter.set(key.slice(PREDICTION_BAND_PREFIX.length), [v[0], v[1]]);
+    }
+  }
   return (
     <div className="rounded-md border border-white/10 bg-black/95 p-3 text-xs text-neutral-100 shadow-lg backdrop-blur">
       <p className="font-mono text-[10px] text-neutral-400">{String(label ?? "")}</p>
@@ -670,17 +880,33 @@ function HoverCard({
           const key = String(p.dataKey);
           const value = p.value;
           if (value === null || value === undefined) return null;
+          const isPrediction = key.startsWith(PREDICTION_SERIES_PREFIX);
+          const submitter = isPrediction ? key.slice(PREDICTION_SERIES_PREFIX.length) : key;
+          const color = isPrediction
+            ? predictionColors[submitter] ?? "#fbbf24"
+            : colorByGroup[key] ?? "#0ea5e9";
+          const band = isPrediction ? bandsBySubmitter.get(submitter) : undefined;
           return (
             <li key={key} className="flex items-center gap-2">
               <span
                 aria-hidden="true"
                 className="inline-block h-2 w-2 rounded-sm"
-                style={{ background: colorByGroup[key] ?? "#0ea5e9" }}
+                style={{ background: color }}
               />
-              {showSeriesName && <span className="text-neutral-200">{key}:</span>}
+              {(showSeriesName || isPrediction) && (
+                <span className="text-neutral-200">
+                  {isPrediction ? `${submitter} (forecast)` : key}:
+                </span>
+              )}
               <span className="font-mono text-neutral-100">
                 {typeof value === "number" ? value.toLocaleString() : String(value)}
               </span>
+              {band && (
+                <span className="font-mono text-[10px] text-neutral-400">
+                  [{band[0].toLocaleString(undefined, { maximumFractionDigits: 0 })} –{" "}
+                  {band[1].toLocaleString(undefined, { maximumFractionDigits: 0 })}]
+                </span>
+              )}
             </li>
           );
         })}

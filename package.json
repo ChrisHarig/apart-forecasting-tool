@@ -10,11 +10,15 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@huggingface/hub": "^2.11.0",
+    "@types/papaparse": "^5.5.2",
     "@types/topojson-client": "^3.1.5",
     "@vitejs/plugin-react": "^4.3.4",
+    "hyparquet-writer": "^0.13.0",
     "i18n-iso-countries": "^7.14.0",
     "lucide-react": "^0.468.0",
     "maplibre-gl": "^5.24.0",
+    "papaparse": "^5.5.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-simple-maps": "^3.0.0",

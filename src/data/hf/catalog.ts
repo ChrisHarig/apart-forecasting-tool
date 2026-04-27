@@ -4,6 +4,17 @@ import { readCache, writeCache } from "./cache";
 
 const CATALOG_KEY = "catalog";
 
+// Predictions companion repos (`EPI-Eval/<id>-predictions`) live in the same
+// org as truth datasets but are not first-class catalog entries — they have
+// no parquet until forecasters submit, no surveillance metadata, and listing
+// them in the dashboard 2x's the row-fetch volume against the HF rate limit.
+// They're surfaced separately by the v2.5 read-side overlay.
+const PREDICTIONS_SUFFIX = "-predictions";
+
+export function isPredictionsCompanion(info: HfDatasetInfo): boolean {
+  return info.id.endsWith(PREDICTIONS_SUFFIX);
+}
+
 const KNOWN_CATEGORIES: SurveillanceCategory[] = [
   "respiratory",
   "arboviral",
@@ -117,15 +128,25 @@ function deriveSourceFromHf(info: HfDatasetInfo): SourceMetadata {
   };
 }
 
+// Catalog changes ~weekly (when a new dataset is ingested), so refetching
+// hourly is wasteful and increases the chance of catalog fetches racing
+// with row fetches against the per-IP rate limit. 24h is plenty fresh; the
+// "Refresh" button still does `force: true` for users who want immediate
+// pickup of a new dataset.
+const CATALOG_TTL_MS = 24 * 60 * 60 * 1000;
+
 export async function getCatalog(opts: { force?: boolean } = {}): Promise<SourceMetadata[]> {
   if (!opts.force) {
     const cached = readCache<SourceMetadata[]>(CATALOG_KEY);
     if (cached) return cached;
   }
   const datasets = await listOrgDatasets();
-  const catalog = datasets.map(deriveSourceFromHf).sort((a, b) => a.pretty_name.localeCompare(b.pretty_name));
-  writeCache(CATALOG_KEY, catalog);
+  const catalog = datasets
+    .filter((d) => !isPredictionsCompanion(d))
+    .map(deriveSourceFromHf)
+    .sort((a, b) => a.pretty_name.localeCompare(b.pretty_name));
+  writeCache(CATALOG_KEY, catalog, CATALOG_TTL_MS);
   return catalog;
 }
 
-export const _internal = { deriveSourceFromHf };
+export const _internal = { deriveSourceFromHf, isPredictionsCompanion };
