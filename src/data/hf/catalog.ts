@@ -4,6 +4,17 @@ import { readCache, writeCache } from "./cache";
 
 const CATALOG_KEY = "catalog";
 
+// Predictions companion repos (`EPI-Eval/<id>-predictions`) live in the same
+// org as truth datasets but are not first-class catalog entries — they have
+// no parquet until forecasters submit, no surveillance metadata, and listing
+// them in the dashboard 2x's the row-fetch volume against the HF rate limit.
+// They're surfaced separately by the v2.5 read-side overlay.
+const PREDICTIONS_SUFFIX = "-predictions";
+
+export function isPredictionsCompanion(info: HfDatasetInfo): boolean {
+  return info.id.endsWith(PREDICTIONS_SUFFIX);
+}
+
 const KNOWN_CATEGORIES: SurveillanceCategory[] = [
   "respiratory",
   "arboviral",
@@ -123,9 +134,12 @@ export async function getCatalog(opts: { force?: boolean } = {}): Promise<Source
     if (cached) return cached;
   }
   const datasets = await listOrgDatasets();
-  const catalog = datasets.map(deriveSourceFromHf).sort((a, b) => a.pretty_name.localeCompare(b.pretty_name));
+  const catalog = datasets
+    .filter((d) => !isPredictionsCompanion(d))
+    .map(deriveSourceFromHf)
+    .sort((a, b) => a.pretty_name.localeCompare(b.pretty_name));
   writeCache(CATALOG_KEY, catalog);
   return catalog;
 }
 
-export const _internal = { deriveSourceFromHf };
+export const _internal = { deriveSourceFromHf, isPredictionsCompanion };

@@ -92,7 +92,7 @@ export function FeedPage({ onOpen, onOpenUserDataset }: FeedPageProps) {
             <span className="text-xs text-neutral-500">· {catalog.data.length}</span>
           )}
           {datasets.length > 0 && (
-            <span className="text-xs text-amber-300">· {datasets.length} mine</span>
+            <span className="text-xs text-amber-300">· {datasets.length} personal</span>
           )}
         </div>
         <div className="relative ml-auto min-w-[220px] flex-1 max-w-md">
@@ -377,7 +377,7 @@ function UserDatasetCard({ dataset, onOpen, onRemove }: UserCardProps) {
             className="flex items-center gap-1 rounded-md border border-sky-500/40 bg-sky-700/30 px-2 py-0.5 text-[11px] font-semibold text-sky-100 hover:border-sky-500/60 hover:bg-sky-700/45"
             title="Open in this pane"
           >
-            Open <ArrowUpRight className="h-3 w-3" />
+            Open data <ArrowUpRight className="h-3 w-3" />
           </button>
         </div>
       </div>
@@ -450,8 +450,16 @@ function RecentObservationsTable({ recent }: { recent: ReturnType<typeof useRece
   }
   if (recent.status === "error") {
     return (
-      <div className="rounded-md border border-red-500/30 bg-red-950/20 px-3 py-2 text-xs text-red-200">
-        Couldn't load recent observations: {recent.error}
+      <div className="flex items-start justify-between gap-3 rounded-md border border-red-500/30 bg-red-950/20 px-3 py-2 text-xs text-red-200">
+        <span>Couldn't load recent observations: {recent.error}</span>
+        <button
+          type="button"
+          onClick={recent.refetch}
+          className="flex shrink-0 items-center gap-1 rounded border border-red-300/50 bg-red-500/10 px-2 py-0.5 text-[11px] font-semibold text-red-100 transition hover:border-red-200 hover:bg-red-500/20"
+        >
+          <RefreshCw className="h-3 w-3" />
+          Retry
+        </button>
       </div>
     );
   }

@@ -59,3 +59,18 @@ describe("deriveSourceFromHf", () => {
     expect(source.surveillance_category).toBe("none");
   });
 });
+
+describe("isPredictionsCompanion", () => {
+  it("identifies predictions companion repos by suffix", () => {
+    expect(_internal.isPredictionsCompanion({ id: "EPI-Eval/nhsn-hrd-predictions" })).toBe(true);
+    expect(_internal.isPredictionsCompanion({ id: "EPI-Eval/flusight-forecast-hub-predictions" })).toBe(true);
+  });
+
+  it("does not flag truth datasets", () => {
+    expect(_internal.isPredictionsCompanion({ id: "EPI-Eval/nhsn-hrd" })).toBe(false);
+    expect(_internal.isPredictionsCompanion({ id: "EPI-Eval/flusight-forecast-hub" })).toBe(false);
+    // A dataset that happens to contain the substring elsewhere should still
+    // be treated as truth.
+    expect(_internal.isPredictionsCompanion({ id: "EPI-Eval/predictions-archive" })).toBe(false);
+  });
+});

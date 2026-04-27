@@ -1,5 +1,5 @@
 import type { ComponentType, SVGProps } from "react";
-import { ExternalLink, Globe2, LineChart, Loader2, Table2 } from "lucide-react";
+import { ExternalLink, Globe2, LineChart, Loader2, RefreshCw, Table2 } from "lucide-react";
 import { useDashboard } from "../../state/DashboardContext";
 import { useWorkspace, type ExplorerPane } from "../../state/WorkspaceContext";
 import { useDatasetSlice } from "../../data/hf/hooks";
@@ -65,7 +65,20 @@ export function ExplorerBody({ pane }: Props) {
         </div>
       )}
       {slice.status === "error" && (
-        <p className="text-sm text-red-200">Failed to load: {slice.error}</p>
+        <div className="flex items-start justify-between gap-3 rounded-md border border-red-500/40 bg-red-950/20 px-3 py-2">
+          <div className="text-sm text-red-200">
+            <p className="font-semibold text-red-100">Failed to load.</p>
+            <p className="mt-0.5 text-xs text-red-200/80">{slice.error}</p>
+          </div>
+          <button
+            type="button"
+            onClick={slice.refetch}
+            className="flex shrink-0 items-center gap-1 rounded-md border border-red-300/50 bg-red-500/10 px-2.5 py-1 text-xs font-semibold text-red-100 transition hover:border-red-200 hover:bg-red-500/20"
+          >
+            <RefreshCw className="h-3 w-3" />
+            Retry
+          </button>
+        </div>
       )}
 
       {slice.status === "ready" && slice.data && (

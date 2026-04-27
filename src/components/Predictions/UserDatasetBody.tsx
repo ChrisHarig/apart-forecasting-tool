@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Info, Loader2, Table2 } from "lucide-react";
+import { Info, Loader2, RefreshCw, Send, Table2 } from "lucide-react";
 import {
   Area,
   CartesianGrid,
@@ -52,6 +52,7 @@ import {
 } from "../../data/predictions/baselines";
 import type { UserDataset } from "../../data/predictions/types";
 import type { SourceMetadata } from "../../types/source";
+import { SubmitPredictionsDialog } from "./SubmitPredictionsDialog";
 
 const TRUTH_COLOR = "#10b981"; // emerald-500
 const PREDICTION_COLOR = "#f59e0b"; // amber-500
@@ -78,6 +79,7 @@ export function UserDatasetBody({ pane }: Props) {
   const { getDataset } = usePredictions();
   const userDataset = getDataset(pane.userDatasetId);
   const [baselineKey, setBaselineKey] = useState<BaselineKey>("naive-last-value");
+  const [submitOpen, setSubmitOpen] = useState(false);
 
   const setTarget = (targetSourceId: string | null, targetColumn: string | null) =>
     updatePane(pane.id, (p) =>
@@ -87,6 +89,18 @@ export function UserDatasetBody({ pane }: Props) {
     updatePane(pane.id, (p) =>
       p.type === "user-dataset" ? { ...p, showTable: !p.showTable } : p
     );
+
+  // Categorical pass-through columns from the prediction CSV. Computed at
+  // the parent level so the submit button (in CompareHeader) can be wired
+  // before the user has chosen a comparison target.
+  const passthroughDimNames = useMemo(() => {
+    if (!userDataset) return [] as string[];
+    return detectCategoricalFields(userDataset.rows, [
+      userDataset.dateField,
+      ...userDataset.numericFields,
+      ...(userDataset.quantileField ? [userDataset.quantileField] : [])
+    ]).map((d) => d.name);
+  }, [userDataset]);
 
   if (!userDataset) {
     return (
@@ -103,6 +117,7 @@ export function UserDatasetBody({ pane }: Props) {
   const target = pane.targetSourceId
     ? catalog.data?.find((s) => s.id === pane.targetSourceId) ?? null
     : null;
+  const submitReady = Boolean(target && pane.targetColumn);
 
   return (
     <div className="space-y-3 p-3">
@@ -113,6 +128,8 @@ export function UserDatasetBody({ pane }: Props) {
         targetSourceId={pane.targetSourceId}
         targetColumn={pane.targetColumn}
         onChange={setTarget}
+        submitReady={submitReady}
+        onSubmit={() => setSubmitOpen(true)}
       />
       {target && pane.targetColumn ? (
         <ComparisonView
@@ -131,6 +148,16 @@ export function UserDatasetBody({ pane }: Props) {
           onToggleTable={toggleTable}
         />
       )}
+
+      {submitOpen && target && pane.targetColumn && (
+        <SubmitPredictionsDialog
+          dataset={userDataset}
+          targetDatasetId={target.id}
+          targetColumn={pane.targetColumn}
+          passthroughDims={passthroughDimNames}
+          onClose={() => setSubmitOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -142,6 +169,8 @@ interface CompareHeaderProps {
   targetSourceId: string | null;
   targetColumn: string | null;
   onChange: (sourceId: string | null, column: string | null) => void;
+  submitReady: boolean;
+  onSubmit: () => void;
 }
 
 function CompareHeader({
@@ -150,7 +179,9 @@ function CompareHeader({
   sources,
   targetSourceId,
   targetColumn,
-  onChange
+  onChange,
+  submitReady,
+  onSubmit
 }: CompareHeaderProps) {
   const target = targetSourceId
     ? sources.find((s) => s.id === targetSourceId) ?? null
@@ -205,6 +236,20 @@ function CompareHeader({
             </select>
           </label>
         )}
+        <button
+          type="button"
+          onClick={submitReady ? onSubmit : undefined}
+          disabled={!submitReady}
+          title={
+            submitReady
+              ? `Open a community PR on EPI-Eval/${target?.id}-predictions`
+              : "Pick a Compare to dataset and target column to enable submission"
+          }
+          className="flex h-[26px] items-center gap-1.5 self-end rounded-md border border-sky-500/40 bg-sky-500/10 px-2.5 text-[11px] font-semibold text-sky-100 transition hover:border-sky-400 hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-transparent disabled:text-neutral-500 disabled:hover:border-white/10 disabled:hover:bg-transparent"
+        >
+          <Send className="h-3 w-3" />
+          Submit to HuggingFace
+        </button>
       </div>
     </div>
   );
@@ -536,7 +581,20 @@ function ComparisonView({
         </div>
       )}
       {truthSlice.status === "error" && (
-        <p className="text-sm text-red-200">Failed to load truth: {truthSlice.error}</p>
+        <div className="flex items-start justify-between gap-3 rounded-md border border-red-500/40 bg-red-950/20 px-3 py-2">
+          <div className="text-sm text-red-200">
+            <p className="font-semibold text-red-100">Failed to load truth.</p>
+            <p className="mt-0.5 text-xs text-red-200/80">{truthSlice.error}</p>
+          </div>
+          <button
+            type="button"
+            onClick={truthSlice.refetch}
+            className="flex shrink-0 items-center gap-1 rounded-md border border-red-300/50 bg-red-500/10 px-2.5 py-1 text-xs font-semibold text-red-100 transition hover:border-red-200 hover:bg-red-500/20"
+          >
+            <RefreshCw className="h-3 w-3" />
+            Retry
+          </button>
+        </div>
       )}
 
       {truthSlice.status === "ready" && computed && (

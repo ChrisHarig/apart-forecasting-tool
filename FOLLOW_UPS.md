@@ -96,30 +96,84 @@ leaderboard.
 
 Effort: 2–3 sessions.
 
-### v2 — HF predictions sibling datasets + community PR submission
+### v2 — HF predictions sibling submission (write-side) — SHIPPED
 
-- Schema for prediction cards as `<id>-predictions` siblings, plus
-  schema doc updates.
-- Validator extension in `upload_pipeline/core/validate.py` that knows
-  the prediction schema (accepts `target_dataset` + `target_column`,
-  validates `quantile ∈ [0,1]`, checks the target dataset/column exists).
-- Required fields for HF-published predictions: `submitter`,
-  `model_name`, `description` (human-readable), `target_dataset`,
-  `target_column(s)`, dates.
-- "Open PR to HF" button in the dashboard. Uses HF API
-  (`huggingface_hub` JS bindings or direct REST) to:
-  1. Fork the sibling dataset to the user's account
-  2. Add their parquet under `data/<submitter>-<timestamp>.parquet`
-  3. Create a community PR back to `EPI-Eval/<id>-predictions`
-- Pull-predictions toggle when opening a target dataset — fetches the
-  sibling dataset's slice and shows accepted predictions overlaid on
-  the chart and listed in the table.
-- Prediction time range: anywhere between the start of the target
-  dataset's coverage and ~2 months past its `time_coverage.end`.
-  The dashboard simply doesn't show comparison metrics for predictions
-  whose target_date is past the truth's coverage.
+Done:
+- All 32 `EPI-Eval/<id>-predictions` companion repos bootstrapped via
+  `upload_pipeline/core/bootstrap_predictions_repos.py` (idempotent, has
+  `--dry-run` / `--apply` / `--only` / `--refresh-readme` flags). Each repo
+  has a starter README with the schema table and a link back to its truth.
+- Browser-side parquet writer + submission flow: drag-drop CSV → pick
+  Compare-to → "Submit to HuggingFace" button in the user dataset pane →
+  HF community PR opened directly via `commit({ isPullRequest: true })` (no
+  fork dance). Filename pattern `data/<submitter>-<model>-<UTC-stamp>.parquet`.
+- HF token stored in `localStorage`; inline prompt with link to
+  `huggingface.co/settings/tokens` when missing.
+- 401 / 403 / 404 errors humanized in the dialog.
 
-Effort: 2–4 sessions, mostly HF API plumbing + schema work.
+Open follow-ups (v2.1):
+- Validator extension in `upload_pipeline/core/validate.py` for the
+  `<id>-predictions` schema (accepts `target_dataset` + `target_column`,
+  validates `quantile ∈ [0,1]`, sanity-checks the target column exists).
+  Helps mechanize maintainer review on incoming PRs.
+- Schema doc page in `upload_pipeline/schema/` describing the
+  predictions long-format and the kv-metadata convention (`epi-eval.*`).
+
+### v2.5 — Read-side overlay (predictions on the target dataset's view)
+
+Once submissions are merged into a sibling repo, target dataset views
+should be able to *show* them: prediction lines from many forecasters
+overlaid on the truth, both on the chart and in the table. Effort
+estimate: 2–3 sessions, most of it UX rather than data plumbing — the
+pull is just `useDatasetSlice("EPI-Eval/<id>-predictions")` reusing what
+we already have.
+
+Selection mechanics — the load-bearing UX problem
+- Every prediction row carries `submitter`, `model_name`, optional
+  category dims. A popular target could accumulate dozens of submitters
+  × multiple model versions × dozens of dates = a mess of lines. Need a
+  selection panel.
+- Default state: probably "show top 5 most-recent submissions" or a
+  similar opinionated default, plus a "show all / customize" expander.
+- Selection panel: grouped by submitter, then model_name. Toggle whole
+  submitters or individual model runs. Color per (submitter, model)
+  pair; legend shows what's currently on.
+- The user's existing dim-pick logic (for joining truth ↔ prediction)
+  applies here too: predictions filtered down to the same categorical
+  slice the user is looking at on truth.
+
+Visual distinction (truth vs prediction)
+- Truth: solid emerald line, opaque (current convention).
+- Predictions: distinct color per submitter, dashed or
+  semi-transparent. Quantile bands tinted to the submitter's color.
+- Legend grouped: "Truth" header, then a "Predictions" section listing
+  active submitter/model combinations.
+- A "predictions" badge or pill on the chart and in any prediction-only
+  table rows so the rendering layer is unambiguous about provenance.
+
+Chart + table extension past truth coverage
+- Chart x-axis must extend up to ~`max(prediction.target_date)` even
+  when that's past `truth.time_coverage.end` (forecast horizon
+  predictions). Truth line just stops; prediction lines continue.
+- Table needs to hold rows for dates with prediction values but no
+  truth observation — `observed: null`, `predicted: <value>`. Same
+  outer-join logic the per-user dataset pane already uses; reuse that
+  joiner.
+- Header indicators: "Truth coverage ends 2025-W12 — predictions extend
+  to 2025-W18 (forecast horizon)" or similar so the user understands
+  why the line goes flat.
+
+Other notes
+- Selection state should live in the pane's persisted state (so the
+  workspace remembers which submitters were selected on a given pane).
+- For datasets with truly large prediction archives (will eventually
+  happen on flusight-forecast-hub), we'll need a "browse archive"
+  modal / paginated selector rather than rendering everything at once.
+  Defer until we hit it.
+- Performance: rendering >50 lines on Recharts gets visibly sluggish.
+  Cap at ~30 active series with a "too many to plot" warning, and
+  recommend collapsing by submitter (median across that submitter's
+  models) as a follow-up.
 
 ### v3 — map display + advanced baselines
 

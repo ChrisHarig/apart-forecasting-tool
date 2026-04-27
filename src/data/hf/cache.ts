@@ -2,7 +2,10 @@
 // hourly", so 1h is the default. Falls back to a no-op when localStorage is
 // unavailable (SSR, private mode quotas).
 
-const PREFIX = "epieval-cache:v1:";
+// v2 (2026-04-26): bumped to flush catalogs cached before the predictions
+// companion repos were filtered out. Old `:v1:` entries in localStorage are
+// orphaned and will simply expire under their own TTL.
+const PREFIX = "epieval-cache:v2:";
 const DEFAULT_TTL_MS = 60 * 60 * 1000;
 
 interface Entry<T> {
