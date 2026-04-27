@@ -28,6 +28,7 @@ from dotenv import load_dotenv
 from huggingface_hub import HfApi, create_repo, hf_hub_download
 from huggingface_hub.utils import EntryNotFoundError, RepositoryNotFoundError
 
+from upload_pipeline.core.bootstrap_predictions_repos import bootstrap_one
 from upload_pipeline.core.render_card import render_card
 from upload_pipeline.core.validate import REPO_ROOT, SOURCES_DIR, compute_diff, validate_source
 
@@ -127,6 +128,18 @@ def upload_source(source_id: str) -> str:
             repo_id=repo_id, repo_type="dataset",
             token=token, private=False, exist_ok=True,
         )
+        # First-upload only: also bootstrap the predictions sibling so
+        # forecasters have somewhere to PR. No-op on re-ingests because
+        # this branch only runs when the truth repo is being created. If
+        # the companion already exists (e.g. someone ran bootstrap manually),
+        # bootstrap_one returns "OK" and skips.
+        try:
+            companion_status = bootstrap_one(
+                api, token, source_id, apply=True, refresh_readme=False
+            )
+            print(f"  Predictions companion: {companion_status}")
+        except Exception as e:  # noqa: BLE001 — companion bootstrap is best-effort
+            print(f"  WARNING: companion bootstrap failed for {source_id}: {e}")
 
     prev_readme = None
     prev_data_hash = None
