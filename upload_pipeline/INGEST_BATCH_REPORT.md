@@ -8,7 +8,6 @@ the schema had to grow to fit it.
 | source_id | rows | locations | range | predictor cols (T = target, C = covariate) |
 |---|---|---|---|---|
 | `nhsn-hrd` | 20k | 60 | 2020 → present | T: `totalconfflunewadm`, `totalconfc19newadm`, `totalconfrsvnewadm` · C: bed/ICU stocks |
-| `cdc-ilinet` | 100k+ | 65 | 1997 → present | T: `wili`, `ili` · C: `num_ili`, `num_patients`, `num_providers` |
 | `cdc-nssp` | 25k | 51 | 2023 → present | T: `percent_visits` (filtered by condition) |
 | `ecdc-erviss` | 10k | 28 | 2021 → present | T: `ili_rate`, `ari_rate` |
 | `opendengue` | 100k+ | 129 | 1924 → 2023 | T: `dengue_total` (filtered by case_status) |
@@ -30,28 +29,26 @@ the schema had to grow to fit it.
 | `ukhsa-covid-daily` | 2.3k | 1 (England) | 2020 → present | T: `cases`, `admissions`, `deaths_ons` · C: `occupied_beds`, `pcr_tests` |
 | `wikipedia-pageviews` | 43k | 1 global | 2015 → present | C: `views` (covariate; row-level `topic` × 12 articles) |
 
-## Built locally, runnable, deferred for time / API budget (7)
+## Removed 2026-04-26 (11)
 
-Each has working `ingest.py` + `card.yaml`; the bulk fetch was just expensive.
-Each is one `python -m upload_pipeline.sources.<id>.ingest` from done.
+Local source folders deleted and `EPI-Eval/<id>-predictions` companions
+deleted from HuggingFace. `cdc-ilinet` was previously listed as live in this
+report but had never actually been uploaded — confirmed by HF API probe
+during cleanup. Re-add by restoring the source folder and re-running
+`bootstrap_predictions_repos.py --apply` if any of these become viable later.
 
-| source_id | reason for skip | expected size |
-|---|---|---|
-| `cdc-nwss-wastewater` | Socrata pagination ~5 min | ~500k–1M rows |
-| `cdc-nndss` | Long-format multi-year ~5–10 min | ~3M rows |
-| `delphi-fluview-clinical` | 60 polite Delphi calls ~2 min | ~50k rows |
-| `delphi-nchs-mortality` | 51 polite Delphi calls ~1.5 min | ~30k rows |
-| `hhs-protect-historical` | Socrata 4-year fetch ~5 min | ~80k rows |
-| `who-flunet` | OData pagination ~3 min | ~700k rows |
-| `who-fluid` | OData pagination ~2 min | ~500k rows |
-
-## Stub-only — endpoint blocked or auth required (3)
-
-| source_id | blocker | recommendation |
-|---|---|---|
-| `paho-dengue` | PAHO Arbo Portal returned 502 during build | re-verify the JSON URL behind the Shiny app |
-| `cdc-dengue-us` | CDC's dengue page renders client-side; no stable API | drop in favour of `cdc-nndss` filtered to `condition='dengue'` |
-| `infodengue-br` | Mosqlimate API requires `X-UID-KEY` (free reg) | apply for key, then run as-is |
+| source_id | reason removed |
+|---|---|
+| `cdc-ilinet` | Delphi `fluview` rate-limit blocks anonymous bulk ingest (60 req/hr; needs 67 calls). Requires Delphi API key. |
+| `delphi-fluview-clinical` | Same Delphi rate-limit problem (62 calls). Requires API key. |
+| `delphi-nchs-mortality` | Delphi `/epidata/nchs_mortality/` endpoint removed upstream — returns 404. Replace via NCHS data.cdc.gov Socrata if revived. |
+| `cdc-nwss-wastewater` | Deferred bulk Socrata fetch never run; not currently needed. |
+| `cdc-nndss` | Same — deferred multi-year long-format fetch never run. |
+| `hhs-protect-historical` | Deferred 4-year Socrata fetch never run. |
+| `who-fluid` / `who-flunet` | Deferred OData paginations never run. |
+| `paho-dengue` | PAHO Arbo Portal endpoint returned 502 at build; never verified. OpenDengue covers same countries through 2023. |
+| `cdc-dengue-us` | CDC dengue page is client-rendered; superseded by `cdc-nndss` arboviral rows when those are revived. |
+| `infodengue-br` | Mosqlimate API requires `X-UID-KEY`; never registered. |
 
 ## Schema changes landed this session
 
@@ -84,13 +81,4 @@ python -m upload_pipeline.core.validate <source_id>
 # Push to EPI-Eval/<source_id> (creates repo if needed, idempotent re-runs
 # only re-upload changed files):
 python -m upload_pipeline.core.upload <source_id>
-
-# Deferred bulk runs:
-python -m upload_pipeline.sources.cdc-nwss-wastewater.ingest      # ~5 min
-python -m upload_pipeline.sources.cdc-nndss.ingest                # ~5–10 min
-python -m upload_pipeline.sources.delphi-fluview-clinical.ingest  # ~2 min
-python -m upload_pipeline.sources.delphi-nchs-mortality.ingest    # ~1.5 min
-python -m upload_pipeline.sources.hhs-protect-historical.ingest   # ~5 min
-python -m upload_pipeline.sources.who-flunet.ingest               # ~3 min
-python -m upload_pipeline.sources.who-fluid.ingest                # ~2 min
 ```
