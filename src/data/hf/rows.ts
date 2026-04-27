@@ -52,7 +52,26 @@ export async function getDatasetSlice(
   let total = 0;
   while (collected.length < max) {
     const length = Math.min(PAGE_SIZE, max - collected.length);
-    const page = await fetchRows(datasetId, { offset, length });
+    let page;
+    try {
+      page = await fetchRows(datasetId, { offset, length });
+    } catch (err) {
+      // datasets-server returns 404 for repos that have no parquet
+      // committed yet (e.g. fresh predictions companion repos with no
+      // submissions). Treat that as an empty slice rather than an error
+      // — the consumer surfaces "no submissions yet" naturally.
+      if (offset === 0 && isEmptyDatasetError(err)) {
+        const emptySlice: DatasetSlice = {
+          datasetId,
+          rows: [],
+          numRowsTotal: 0,
+          truncated: false
+        };
+        writeCache(rowsKey(datasetId, max), emptySlice);
+        return emptySlice;
+      }
+      throw err;
+    }
     total = page.num_rows_total ?? collected.length + page.rows.length;
     for (const r of page.rows) collected.push(r.row);
     if (page.rows.length < length) break;
@@ -68,6 +87,10 @@ export async function getDatasetSlice(
   };
   writeCache(rowsKey(datasetId, max), slice);
   return slice;
+}
+
+function isEmptyDatasetError(err: unknown): boolean {
+  return err instanceof Error && /^HF rows failed: 404\b/.test(err.message);
 }
 
 export async function getRecentRows(

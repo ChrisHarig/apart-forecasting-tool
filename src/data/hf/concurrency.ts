@@ -61,10 +61,12 @@ async function spaceStart(): Promise<void> {
 
 export function isRetryableHfError(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
-  // 429 — surfaced by client.ts in the message text.
-  if (/^HF rows failed: 429\b/.test(err.message)) return true;
-  // 5xx — transient datasets-server hiccups.
-  if (/^HF rows failed: 5\d\d\b/.test(err.message)) return true;
+  // 429 — surfaced by client.ts in the message text. Match across all
+  // entry points (rows / list datasets / splits) since they all share the
+  // "HF <kind> failed: <code>" format.
+  if (/^HF [\w ]+ failed: 429\b/.test(err.message)) return true;
+  // 5xx — transient datasets-server / api hiccups.
+  if (/^HF [\w ]+ failed: 5\d\d\b/.test(err.message)) return true;
   // Bare network failure (Cloudflare connection drop / DNS / etc.).
   // The browser fetch primitive throws TypeError("Failed to fetch") in
   // these cases; treat as retryable.
@@ -93,7 +95,7 @@ export async function withGate<T>(fn: () => Promise<T>): Promise<T> {
         const reason =
           err instanceof Error && err.name === "TypeError"
             ? "network drop"
-            : err instanceof Error && /^HF rows failed: 5/.test(err.message)
+            : err instanceof Error && /^HF [\w ]+ failed: 5/.test(err.message)
               ? "5xx"
               : "429";
         console.info(

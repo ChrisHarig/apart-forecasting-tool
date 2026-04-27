@@ -128,6 +128,13 @@ function deriveSourceFromHf(info: HfDatasetInfo): SourceMetadata {
   };
 }
 
+// Catalog changes ~weekly (when a new dataset is ingested), so refetching
+// hourly is wasteful and increases the chance of catalog fetches racing
+// with row fetches against the per-IP rate limit. 24h is plenty fresh; the
+// "Refresh" button still does `force: true` for users who want immediate
+// pickup of a new dataset.
+const CATALOG_TTL_MS = 24 * 60 * 60 * 1000;
+
 export async function getCatalog(opts: { force?: boolean } = {}): Promise<SourceMetadata[]> {
   if (!opts.force) {
     const cached = readCache<SourceMetadata[]>(CATALOG_KEY);
@@ -138,7 +145,7 @@ export async function getCatalog(opts: { force?: boolean } = {}): Promise<Source
     .filter((d) => !isPredictionsCompanion(d))
     .map(deriveSourceFromHf)
     .sort((a, b) => a.pretty_name.localeCompare(b.pretty_name));
-  writeCache(CATALOG_KEY, catalog);
+  writeCache(CATALOG_KEY, catalog, CATALOG_TTL_MS);
   return catalog;
 }
 
